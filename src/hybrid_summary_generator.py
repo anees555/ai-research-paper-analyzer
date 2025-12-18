@@ -65,41 +65,41 @@ class HybridSummaryGenerator:
             try:
                 self.grobid_processor = OptimizedGROBIDProcessor()
                 if self.grobid_processor.check_grobid_health():
-                    print("✅ GROBID processor initialized and healthy")
+                    print(" GROBID processor initialized and healthy")
                 else:
-                    print("⚠️ GROBID processor initialized but server not healthy")
+                    print(" GROBID processor initialized but server not healthy")
                     self.grobid_processor = None
             except Exception as e:
-                print(f"❌ GROBID processor initialization failed: {e}")
+                print(f" GROBID processor initialization failed: {e}")
                 self.grobid_processor = None
         else:
-            print("❌ GROBID processor not available")
+            print(" GROBID processor not available")
         
         # Initialize AI models
         if TRANSFORMERS_AVAILABLE:
             try:
-                print("🤖 Loading BART model for quick summaries...")
+                print(" Loading BART model for quick summaries...")
                 self.bart_summarizer = pipeline(
                     "summarization", 
                     model="facebook/bart-large-cnn",
                     device=-1
                 )
-                print("✅ BART model loaded successfully")
+                print(" BART model loaded successfully")
                 
-                print("🧠 Loading Longformer model for deep summaries...")
+                print(" Loading Longformer model for deep summaries...")
                 self.longformer_summarizer = pipeline(
                     "summarization",
                     model="allenai/led-large-16384-arxiv",  # Longformer for long documents
                     device=-1
                 )
-                print("✅ Longformer model loaded successfully")
+                print(" Longformer model loaded successfully")
                 
             except Exception as e:
-                print(f"❌ AI model loading failed: {e}")
+                print(f" AI model loading failed: {e}")
                 self.bart_summarizer = None
                 self.longformer_summarizer = None
         else:
-            print("❌ Transformers not available")
+            print(" Transformers not available")
     
     def extract_with_grobid(self, pdf_path: str, timeout_limit: int = 300) -> Dict[str, Any]:
         """
@@ -108,7 +108,7 @@ class HybridSummaryGenerator:
         if not self.grobid_processor:
             raise Exception("GROBID processor not available")
         
-        print(f"🔄 Attempting GROBID extraction (max {timeout_limit}s)...")
+        print(f" Attempting GROBID extraction (max {timeout_limit}s)...")
         
         try:
             # Override timeout strategies for faster processing
@@ -125,10 +125,10 @@ class HybridSummaryGenerator:
             
         except Exception as e:
             if "timeout" in str(e).lower():
-                print(f"⏰ GROBID timed out after {timeout_limit}s")
+                print(f" GROBID timed out after {timeout_limit}s")
                 self.processing_stats["grobid_timeout"] += 1
             else:
-                print(f"❌ GROBID failed: {e}")
+                print(f" GROBID failed: {e}")
             raise
     
     def extract_with_pypdf2(self, pdf_path: str) -> Dict[str, Any]:
@@ -138,7 +138,7 @@ class HybridSummaryGenerator:
         if not PYPDF2_AVAILABLE:
             raise Exception("PyPDF2 not available")
         
-        print("🔄 Using PyPDF2 fallback extraction...")
+        print(" Using PyPDF2 fallback extraction...")
         
         try:
             with open(pdf_path, 'rb') as file:
@@ -222,7 +222,7 @@ class HybridSummaryGenerator:
                 }
                 
         except Exception as e:
-            print(f"❌ PyPDF2 extraction failed: {e}")
+            print(f" PyPDF2 extraction failed: {e}")
             raise
     
     def generate_ai_summary(self, paper_data: Dict[str, Any]) -> str:
@@ -232,8 +232,8 @@ class HybridSummaryGenerator:
         if not self.bart_summarizer:
             # Fallback to simple summary
             if paper_data.get("abstract"):
-                return f"📄 Summary: {paper_data['abstract'][:200]}..."
-            return "❌ No summary available"
+                return f" Summary: {paper_data['abstract'][:200]}..."
+            return " No summary available"
 
         try:
             # Use abstract if available, otherwise use first section
@@ -245,7 +245,7 @@ class HybridSummaryGenerator:
                 input_text = first_section[:1000]  # First 1000 chars
             
             if not input_text or len(input_text) < 50:
-                return "❌ Insufficient content for AI summary"
+                return " Insufficient content for AI summary"
             
             # Clean input text
             input_text = clean_text_comprehensive(input_text)
@@ -258,15 +258,15 @@ class HybridSummaryGenerator:
                 do_sample=False
             )
             
-            return f"🤖 Quick Summary: {result[0]['summary_text']}"
+            return f" Quick Summary: {result[0]['summary_text']}"
             
         except Exception as e:
-            print(f"❌ AI summarization failed: {e}")
+            print(f" AI summarization failed: {e}")
             # Fallback
             if paper_data.get("abstract"):
                 sentences = paper_data["abstract"].split(". ")
-                return f"📄 Summary: {sentences[0]}." if sentences else "❌ Summary unavailable"
-            return "❌ Summary generation failed"
+                return f" Summary: {sentences[0]}." if sentences else " Summary unavailable"
+            return " Summary generation failed"
 
     def generate_deep_summary(self, paper_data: Dict[str, Any]) -> str:
         """
@@ -294,18 +294,18 @@ class HybridSummaryGenerator:
                         do_sample=False
                     )
                     
-                    return f"📖 Extended Summary: {result[0]['summary_text']}"
+                    return f" Extended Summary: {result[0]['summary_text']}"
                     
                 except Exception as e:
-                    print(f"❌ Extended summary failed: {e}")
+                    print(f" Extended summary failed: {e}")
             
-            return "❌ Deep summary not available"
+            return " Deep summary not available"
 
         try:
             # Prepare comprehensive input text for Longformer
             sections = paper_data.get("sections", {})
             if not sections:
-                return "❌ No content available for deep summary"
+                return " No content available for deep summary"
             
             # Build comprehensive text from all sections
             comprehensive_text = ""
@@ -324,9 +324,9 @@ class HybridSummaryGenerator:
             comprehensive_text = clean_text_comprehensive(comprehensive_text)
             
             if len(comprehensive_text) < 200:
-                return "❌ Insufficient content for deep summary"
+                return " Insufficient content for deep summary"
             
-            print("🧠 Generating comprehensive summary with Longformer...")
+            print(" Generating comprehensive summary with Longformer...")
             
             # Generate comprehensive summary (2-3 paragraphs)
             result = self.longformer_summarizer(
@@ -336,12 +336,12 @@ class HybridSummaryGenerator:
                 do_sample=False
             )
             
-            return f"🧠 Deep Analysis: {result[0]['summary_text']}"
+            return f" Deep Analysis: {result[0]['summary_text']}"
             
         except Exception as e:
-            print(f"❌ Deep summary generation failed: {e}")
+            print(f" Deep summary generation failed: {e}")
             # Fallback to extended BART summary
-            return "❌ Deep summary failed"
+            return " Deep summary failed"
 
     def process_single_paper(self, pdf_path: str) -> Dict[str, Any]:
         """
@@ -349,7 +349,7 @@ class HybridSummaryGenerator:
         """
         pdf_name = os.path.basename(pdf_path)
         print(f"\n{'='*60}")
-        print(f"🔄 Processing: {pdf_name}")
+        print(f" Processing: {pdf_name}")
         print(f"{'='*60}")
         
         self.processing_stats["total_processed"] += 1
@@ -361,20 +361,20 @@ class HybridSummaryGenerator:
             try:
                 paper_data = self.extract_with_grobid(pdf_path, timeout_limit=120)  # 2 minute limit
                 processing_method = "GROBID_optimized"
-                print("✅ GROBID extraction successful!")
+                print(" GROBID extraction successful!")
                 
             except Exception as e:
-                print(f"⚠️ GROBID failed, trying fallback: {e}")
+                print(f" GROBID failed, trying fallback: {e}")
         
         # Strategy 2: Fallback to PyPDF2 if GROBID failed
         if paper_data is None and PYPDF2_AVAILABLE:
             try:
                 paper_data = self.extract_with_pypdf2(pdf_path)
                 processing_method = "PyPDF2_fallback"
-                print("✅ PyPDF2 fallback successful!")
+                print(" PyPDF2 fallback successful!")
                 
             except Exception as e:
-                print(f"❌ PyPDF2 fallback also failed: {e}")
+                print(f" PyPDF2 fallback also failed: {e}")
         
         # If all extraction failed
         if paper_data is None:
@@ -385,7 +385,7 @@ class HybridSummaryGenerator:
             }
         
         # Generate summaries
-        print("🤖 Generating multi-level AI summaries...")
+        print(" Generating multi-level AI summaries...")
         
         summaries = {
             "paper_id": pdf_name.replace('.pdf', ''),
@@ -406,28 +406,28 @@ class HybridSummaryGenerator:
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(summaries, f, indent=2, ensure_ascii=False)
         
-        print(f"✅ Hybrid summary saved: {output_file}")
+        print(f" Hybrid summary saved: {output_file}")
         return summaries
     
     def process_directory(self, pdf_directory: str, max_papers: int = 5) -> List[Dict[str, Any]]:
         """
         Process directory with hybrid approach
         """
-        print("🔀 Hybrid AI Summary Generator")
+        print(" Hybrid AI Summary Generator")
         print("Tries GROBID first, falls back to PyPDF2 + AI")
         print("=" * 60)
         
         if not os.path.exists(pdf_directory):
-            print(f"❌ Directory not found: {pdf_directory}")
+            print(f" Directory not found: {pdf_directory}")
             return []
         
         pdf_files = [f for f in os.listdir(pdf_directory) if f.endswith('.pdf')]
         if not pdf_files:
-            print("❌ No PDF files found")
+            print(" No PDF files found")
             return []
         
         pdf_files = pdf_files[:max_papers]
-        print(f"📄 Processing {len(pdf_files)} PDFs with hybrid approach")
+        print(f" Processing {len(pdf_files)} PDFs with hybrid approach")
         
         all_summaries = []
         start_time = time.time()
@@ -440,7 +440,7 @@ class HybridSummaryGenerator:
                 all_summaries.append(summary)
                 
             except Exception as e:
-                print(f"💥 Failed to process {pdf_file}: {e}")
+                print(f" Failed to process {pdf_file}: {e}")
                 all_summaries.append({
                     "paper_id": pdf_file.replace('.pdf', ''),
                     "error": str(e),
@@ -463,29 +463,29 @@ class HybridSummaryGenerator:
         grobid_success = sum(1 for s in successful if s.get("processing_method") == "GROBID_optimized")
         pypdf2_success = sum(1 for s in successful if s.get("processing_method") == "PyPDF2_fallback")
         
-        report = f"""🔀 HYBRID AI SUMMARY GENERATION REPORT
+        report = f""" HYBRID AI SUMMARY GENERATION REPORT
 {"=" * 70}
 
-⏱️ PROCESSING SUMMARY:
+ PROCESSING SUMMARY:
   • Total Processing Time: {processing_time:.1f} seconds
   • Average Time per Paper: {processing_time/len(summaries):.1f}s
   • Total Papers Attempted: {len(summaries)}
 
-📊 SUCCESS BREAKDOWN:
-  • ✅ Total Successful: {len(successful)}
-  • 🔬 GROBID Success: {grobid_success}
-  • 📄 PyPDF2 Fallback: {pypdf2_success} 
-  • ❌ Complete Failures: {len(failed)}
+ SUCCESS BREAKDOWN:
+  •  Total Successful: {len(successful)}
+  •  GROBID Success: {grobid_success}
+  •  PyPDF2 Fallback: {pypdf2_success} 
+  •  Complete Failures: {len(failed)}
 
-🤖 AI ENHANCEMENT:
-  • BART Model Available: {'✅ Yes' if self.bart_summarizer else '❌ No'}
-  • Longformer Model Available: {'✅ Yes' if self.longformer_summarizer else '❌ No'}
+ AI ENHANCEMENT:
+  • BART Model Available: {' Yes' if self.bart_summarizer else ' No'}
+  • Longformer Model Available: {' Yes' if self.longformer_summarizer else ' No'}
   • Quick Summaries Generated: {sum(1 for s in successful if s.get('ai_enhanced', False))}
   • Deep Analyses Generated: {sum(1 for s in successful if s.get('deep_analysis_available', False))}
 
-📂 OUTPUT DIRECTORY: {self.output_dir}
+ OUTPUT DIRECTORY: {self.output_dir}
 
-✅ SUCCESSFULLY PROCESSED:
+ SUCCESSFULLY PROCESSED:
 """
         
         for i, summary in enumerate(successful, 1):
@@ -495,23 +495,23 @@ class HybridSummaryGenerator:
             report += f"  {i}. {title}... ({method}, {sections} sections)\n"
         
         if failed:
-            report += f"\n❌ FAILED PAPERS:\n"
+            report += f"\n FAILED PAPERS:\n"
             for fail in failed:
                 report += f"  • {fail['paper_id']}: {fail.get('error', 'Unknown error')}\n"
         
         report += f"""
-🎯 OPTIMIZATION RESULTS:
+ OPTIMIZATION RESULTS:
   • GROBID Timeout Strategy: Reduced to 2 minutes
   • Fallback Success Rate: {pypdf2_success}/{len(summaries)} papers
   • Overall Success Rate: {len(successful)}/{len(summaries)} ({len(successful)/len(summaries)*100:.1f}%)
 
-🚀 NEXT STEPS:
+ NEXT STEPS:
   1. Review hybrid summaries in: {self.output_dir}
   2. Fine-tune timeout settings based on results
   3. Consider GROBID server optimization
   4. Deploy web interface with hybrid processing
 
-💡 CONCLUSION:
+ CONCLUSION:
   The hybrid approach successfully processes papers even when GROBID times out.
   This provides a robust solution for the AI research paper analyzer.
 """
@@ -523,7 +523,7 @@ class HybridSummaryGenerator:
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(report)
         
-        print(f"📋 Detailed report saved: {report_file}")
+        print(f" Detailed report saved: {report_file}")
 
 def main():
     """
@@ -534,9 +534,9 @@ def main():
     pdf_dir = "datasets/arxiv/pdfs"
     if os.path.exists(pdf_dir):
         summaries = generator.process_directory(pdf_dir, max_papers=3)
-        print(f"\n🎉 Hybrid processing complete! Processed {len(summaries)} papers")
+        print(f"\n Hybrid processing complete! Processed {len(summaries)} papers")
     else:
-        print(f"❌ PDF directory not found: {pdf_dir}")
+        print(f" PDF directory not found: {pdf_dir}")
 
 if __name__ == "__main__":
     main()

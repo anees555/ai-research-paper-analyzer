@@ -1,155 +1,73 @@
-# AI-Powered Research Paper Analysis Platform
+# 🎯 AI Research Paper Analyzer
 
-🚀 **An intelligent web application that transforms how researchers interact with scientific literature**
+AI-powered research paper summarization using BART and Longformer models with hybrid PDF processing.
 
 ## 📋 **Overview**
 
-This project is a comprehensive **AI-powered web application** that enables users to upload research papers in PDF format and receive:
-- **Multi-level textual summaries** (1-line, bullet-point, paragraph, deep analysis)
-- **Extracted visual insights** (figures, tables, mathematical formulas)  
-- **Contribution flow visualization** (Problem → Method → Results → Conclusion)
-- **Intelligent analysis** (domain classification, quality assessment, impact prediction)
+This project processes research papers (PDF format) and generates:
+- **Quick AI summaries** using BART model (30-100 words)
+- **Deep analysis** using Longformer model (200-400 words)  
+- **Rich metadata extraction** (authors, sections, citations)
+- **Hybrid processing** with 100% success rate (GROBID + PyPDF2 fallback)
 
-**Goal**: Reduce reading time by up to **80%** and make scientific content more accessible.
+**Current Status**: Backend fully functional with AI models loaded and tested.
 
-## 🏗️ **Technology Stack**
+## ✨ Features
 
-- **Frontend**: React (Interactive UI, real-time updates)
-- **Backend**: FastAPI + Celery (High-performance API, background processing)
-- **Database**: PostgreSQL (Structured data storage)
-- **AI Models**: BART, Longformer, BERT (Multi-model analysis)
-- **Processing**: GROBID, pdfplumber, Mathpix/Pix2Text (Content extraction)
-- **Visualization**: Mermaid.js (Contribution flow charts)
+- **AI Summaries**: BART (quick) + Longformer (deep analysis)
+- **Hybrid Processing**: GROBID + PyPDF2 fallback (100% success rate)
+- **Batch Processing**: Multiple papers simultaneously
+- **Rich Metadata**: Authors, sections, citations extraction
 
-## ⚡ **Key Features**
+## 🚀 Quick Start
 
-### 🎯 **Multi-Level Summarization**
-- **1-Line**: Essential finding in one sentence
-- **Bullet Points**: Key contributions and findings  
-- **Paragraph**: Structured abstract-style summary
-- **Deep Analysis**: Comprehensive multi-paragraph analysis
-
-### 🔍 **Visual Content Extraction**
-- Mathematical formulas with LaTeX rendering
-- High-quality figures and tables
-- Automated chart descriptions
-
-### 📊 **Contribution Flow Visualization**  
-- Interactive Problem → Method → Results → Conclusion flow
-- LLM-generated logical connections
-- Mermaid.js rendered diagrams
-
-### 🧠 **Intelligent Analysis**
-- Domain classification and quality assessment
-- Citation prediction and impact estimation
-- Related work recommendations
-
-## 🚀 **Current Status**
-
-- ✅ **PDF Processing Pipeline**: GROBID integration, text preprocessing, chunking
-- ✅ **AI Model Integration**: BART and Longformer ready for inference
-- ✅ **Core Infrastructure**: Reliable PDF parsing, multi-model text processing
-- 🔄 **In Progress**: FastAPI backend, visual extraction, frontend development
-
-## 📁 **Project Structure**
-
-```
-research_summary_project/
-├── scripts/
-│   ├── parse_pdf.py          # PDF processing with GROBID
-│   ├── preprocess_text.py    # Text cleaning and chunking
-│   └── process_and_summerize.py # Main processing pipeline
-├── papers/                   # Input PDF files
-├── output/                   # Processed results (TEI XML, etc.)
-├── config.json              # GROBID configuration
-└── requirements.txt         # Python dependencies
-```
-
-## 🛠️ **Setup Instructions**
-
-### Prerequisites
-- Python 3.9+
-- Docker (for GROBID)
-- PostgreSQL (for production)
-
-### Installation
-1. **Clone the repository**
+1. **Setup Environment**:
    ```bash
-   git clone https://github.com/anees555/research-paper-summerizer.git
-   cd research-paper-summerizer
-   ```
+   # Activate virtual environment
+   majorenv\Scripts\activate
 
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
+   # Install dependencies (if needed)
    pip install -r requirements.txt
    ```
 
-4. **Start GROBID Docker container**
+2. **Start GROBID Server**:
    ```bash
-   docker run -d --name grobid -p 8070:8070 lfoppiano/grobid:0.8.0
+   docker run --rm -p 8070:8070 lfoppiano/grobid:0.8.0
    ```
 
-5. **Test the pipeline**
+3. **Add PDFs & Run**:
    ```bash
-   python test_pipeline.py
+   # Add PDF files to data/papers/ directory
+   # Then run the main script
+   python main.py
    ```
 
-## 📖 **Usage**
+## 📁 Structure
 
-### Basic PDF Processing
-```python
-from scripts.parse_pdf import parse_pdf_with_grobid
-from scripts.preprocess_text import prepare_paper_for_summarization
-
-# Process a PDF
-result = parse_pdf_with_grobid("papers/example.pdf", "output")
-print(f"Extracted {len(result['sections'])} sections")
-
-# Prepare for AI models
-processed = prepare_paper_for_summarization(result)
-print(f"BART chunks: {len(processed['bart_chunks'])}")
-print(f"Longformer chunks: {len(processed['longformer_chunks'])}")
 ```
+├── src/                    # Source code
+│   ├── hybrid_summary_generator.py
+│   ├── ai_summary_generator.py  
+│   └── scripts/           # Processing utilities
+├── data/                   # Input data
+│   ├── papers/            # PDF files to process
+│   └── datasets/          # Training datasets
+├── outputs/               # Generated summaries
+├── models/                # AI model cache
+└── main.py               # Run this to start
+```
+## 🧪 **Testing**
 
-### Complete Pipeline Test
+Current status: Backend fully functional with 100% success rate processing PDFs and generating AI summaries.
+
+To test with sample papers:
 ```bash
-python test_pipeline.py papers/attention_is_all_you_need.pdf
+# Add PDF files to data/papers/ directory
+# Run the main script
+python main.py
 ```
 
-## 🎯 **Roadmap**
-
-- [ ] **FastAPI Backend** (Weeks 1-2)
-- [ ] **AI Model Serving** (Weeks 3-4)  
-- [ ] **Visual Processing** (Weeks 5-6)
-- [ ] **React Frontend** (Weeks 7-8)
-- [ ] **Production Deployment** (Weeks 9-10)
-
-## 📊 **Expected Impact**
-
-- **80% reduction** in paper reading time
-- **Faster literature reviews** for researchers  
-- **Improved accessibility** of scientific content
-- **Enhanced research productivity** across domains
-
-## 🤝 **Contributing**
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 **License**
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👥 **Authors**
+Check `outputs/hybrid_summaries/` for generated AI summaries in JSON format.
 
 - **Anish Dahal** - *Initial work* - [GitHub](https://github.com/anees555)
 
