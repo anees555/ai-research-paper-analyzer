@@ -14,8 +14,9 @@ import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from root .env file
+root_env_path = os.path.join(os.path.dirname(__file__), "../../../.env")
+load_dotenv(root_env_path)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -100,21 +101,28 @@ class GroqLLMInterface:
         try:
             start_time = time.time()
             
-            # Default system prompt for academic/scientific content
+            # Default system prompt for natural, accessible responses
             if not system_prompt:
-                system_prompt = """You are an expert research assistant specializing in academic and scientific literature. 
-Provide clear, accurate, and well-structured answers based on the given context. 
-Use formal academic tone while remaining accessible. 
-If the context doesn't contain enough information, say so clearly.
-Always cite relevant information from the provided context."""
+                system_prompt = """You are a helpful AI assistant that explains research papers in simple, easy-to-understand language. 
 
-            # Construct the prompt
-            user_prompt = f"""Context from research documents:
+Your goal is to make complex academic concepts accessible to everyone:
+- Use plain English and avoid unnecessary jargon
+- Explain technical terms in simple words
+- Give practical examples when helpful
+- Structure your answers clearly with bullet points or short paragraphs
+- Be conversational but accurate
+- If something is complex, break it down step by step
+
+Make your response feel like you're explaining to a curious friend, not writing an academic paper."""
+
+            # Construct the prompt for natural conversation
+            user_prompt = f"""Here's what I found in the research paper about your question:
+
 {context}
 
 Question: {question}
 
-Please provide a comprehensive answer based on the context above. Structure your response clearly and cite specific information from the context when relevant."""
+Please explain this in simple terms that anyone can understand. Make it conversational and engaging!"""
 
             # Prepare API request
             payload = {

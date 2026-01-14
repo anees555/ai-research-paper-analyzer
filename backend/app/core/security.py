@@ -1,16 +1,34 @@
 from datetime import datetime, timedelta
 from typing import Optional, Union
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import hashlib
+import secrets
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
+    # Extract salt and hash from stored password
+    if ':' not in hashed_password:
+        return False
+    
+    salt, stored_hash = hashed_password.split(':', 1)
+    # Hash the provided password with the same salt
+    password_hash = hashlib.pbkdf2_hmac('sha256', 
+                                       plain_password.encode('utf-8'), 
+                                       salt.encode('utf-8'), 
+                                       100000)
+    return secrets.compare_digest(password_hash.hex(), stored_hash)
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def get_password_hash(password: str) -> str:
+    """Hash a password for storing"""
+    # Generate a random salt
+    salt = secrets.token_hex(16)
+    # Hash the password
+    password_hash = hashlib.pbkdf2_hmac('sha256', 
+                                       password.encode('utf-8'), 
+                                       salt.encode('utf-8'), 
+                                       100000)
+    return f"{salt}:{password_hash.hex()}"
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()

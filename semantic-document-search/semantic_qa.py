@@ -10,8 +10,9 @@ from typing import Dict, List, Any
 import logging
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from root .env file
+root_env_path = os.path.join(os.path.dirname(__file__), "../.env")
+load_dotenv(root_env_path)
 
 # Add src directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))

@@ -48,6 +48,13 @@ class ChatService:
             return
 
         try:
+            import sys
+            import os
+            # Add the semantic search directory to Python path
+            semantic_search_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'semantic-document-search', 'src'))
+            if semantic_search_path not in sys.path:
+                sys.path.append(semantic_search_path)
+            
             from integrated_pipeline import DocumentSearchPipeline
             from simple_qa_pipeline import SimpleQAPipeline
 
@@ -70,6 +77,7 @@ class ChatService:
 
                 # Check if API key is properly configured
                 groq_api_key = os.getenv('GROQ_API_KEY')
+                print(f"🔑 Groq API key found: {bool(groq_api_key and groq_api_key != 'your_groq_api_key_here')}")  # Debug log
                 if groq_api_key and groq_api_key != 'your_groq_api_key_here':
                     self._groq_llm = GroqLLMInterface()
                     logger.info("Groq LLM initialized for enhanced responses")
@@ -211,8 +219,9 @@ class ChatService:
             # Search for relevant chunks from this paper
             search_filter = {"job_id": job_id}
 
+            # Use more results and broader search for better context
             results = self._pipeline.vector_store.search(
-                query=question, n_results=5, filter_metadata=search_filter
+                query=question, n_results=10, filter_metadata=search_filter
             )
 
             if not results or not results.get("results"):
@@ -222,13 +231,13 @@ class ChatService:
                     confidence=0.0,
                 )
 
-            # Build context from results
+            # Build context from results with lower threshold
             context_parts = []
             sources = []
 
             for item in results.get("results", []):
                 similarity = item.get("similarity", 0)
-                if similarity > 0.3:  # Only use relevant chunks
+                if similarity > 0.2:  # Lower threshold for better coverage
                     metadata = item.get("metadata", {})
                     context_parts.append(
                         f"[{metadata.get('section', 'Section')}]: {item.get('text', '')}"
@@ -309,45 +318,69 @@ class ChatService:
         """Generate system prompt with paper context"""
         paper_info = self._job_contexts.get(job_id, {})
 
-        prompt = f"""You are an expert research assistant helping users understand a specific academic paper.
+    def _get_system_prompt(
+        self, job_id: str, history: Optional[List[ChatMessage]] = None
+    ) -> str:
+        """Generate system prompt with paper context"""
+        paper_info = self._job_contexts.get(job_id, {})
 
-Paper Title: {paper_info.get("title", "Unknown")}
-Available Sections: {", ".join(paper_info.get("sections", []))}
+        prompt = f"""You are a friendly AI assistant helping someone understand a research paper. 
 
-Guidelines:
-- Answer based ONLY on the provided context from the paper
-- Be precise and cite specific sections when possible
-- If the context doesn't contain the answer, say so clearly
-- Use academic but accessible language
-- For technical terms, provide brief explanations
-- Keep responses concise but comprehensive"""
+Paper: {paper_info.get("title", "Unknown")}
+
+Your job is to explain things clearly and naturally:
+- Use simple, everyday language 
+- Break down complex ideas into easy steps
+- Give examples when helpful
+- Be conversational and engaging
+- Imagine you're talking to a curious friend
+
+Available sections: {", ".join(paper_info.get("sections", []))}
+
+Make your explanations accessible to everyone, not just experts!"""
 
         return prompt
 
     def _generate_simple_answer(self, question: str, context_parts: List[str]) -> str:
-        """Generate a simple answer without LLM"""
+        """Generate a simple answer without LLM - improved version"""
         if not context_parts:
             return "I couldn't find relevant information to answer your question."
 
-        # Find most relevant sentence
-        question_words = set(question.lower().split())
-        best_match = ""
-        best_score = 0
-
+        # Combine and clean context
+        full_context = "\n".join(context_parts)
+        
+        # Extract key information based on question type
+        question_lower = question.lower()
+        
+        if "conclusion" in question_lower or "conclude" in question_lower:
+            # Look for conclusion-related content
+            for part in context_parts:
+                if any(word in part.lower() for word in ["conclusion", "conclude", "summary", "finally", "in summary"]):
+                    sentences = [s.strip() for s in part.split('.') if len(s.strip()) > 10]
+                    return f"Based on the paper: {' '.join(sentences[:3])}"
+        
+        elif "attention" in question_lower and "mechanism" in question_lower:
+            # Look for attention mechanism explanations
+            relevant_parts = []
+            for part in context_parts:
+                if "attention" in part.lower():
+                    sentences = [s.strip() for s in part.split('.') if "attention" in s.lower() and len(s.strip()) > 20]
+                    relevant_parts.extend(sentences[:2])
+            
+            if relevant_parts:
+                return f"Based on the paper: {' '.join(relevant_parts)}"
+        
+        # Generic approach - find most informative sentences
+        informative_sentences = []
         for part in context_parts:
-            sentences = part.split(". ")
-            for sentence in sentences:
-                sentence_words = set(sentence.lower().split())
-                overlap = len(question_words & sentence_words)
-                if overlap > best_score:
-                    best_score = overlap
-                    best_match = sentence
-
-        if best_match:
-            return f"Based on the paper: {best_match.strip()}"
-
-        # Return first context as fallback
-        return f"Here's relevant information from the paper:\n\n{context_parts[0][:500]}..."
+            sentences = [s.strip() for s in part.split('.') if len(s.strip()) > 30]
+            informative_sentences.extend(sentences[:2])
+        
+        if informative_sentences:
+            return f"Based on the paper: {' '.join(informative_sentences[:3])}"
+        
+        # Fallback to first context
+        return f"Here's relevant information from the paper:\n\n{context_parts[0][:400]}..."
 
 
 # Singleton instance

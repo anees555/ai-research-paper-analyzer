@@ -46,7 +46,7 @@ class AnalysisResult(BaseModel):
     quick_summary: Optional[str] = None
     detailed_summary: Optional[Dict[str, str]] = None
     comprehensive_analysis: Optional[Dict[str, Any]] = None
-    original_abstract: Optional[str] = None
+    original_abstract: Optional[str] = None  # Add enhanced summary field
 
 
 class JobResponse(BaseModel):

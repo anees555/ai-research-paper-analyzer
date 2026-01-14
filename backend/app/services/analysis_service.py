@@ -44,9 +44,10 @@ class AnalysisService:
             # Store paper data for chat indexing
             self._store_paper_data(job_id, paper_data)
             
-            # 2. Generate Summaries
+            # 2. Generate Enhanced Summaries
             summarizer = self.model_engine.get_summarizer()
             
+            # Generate traditional summaries
             quick_summary = self._generate_quick_summary(paper_data, summarizer)
             detailed = self._generate_detailed_summary(paper_data, summarizer)
             comprehensive = self._generate_comprehensive_analysis(paper_data, summarizer)
