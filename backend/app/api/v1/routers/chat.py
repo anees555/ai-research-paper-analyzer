@@ -2,9 +2,12 @@
 Chat Router - API endpoints for paper Q&A chat
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.data_models.schemas import ChatRequest, ChatResponse
 from app.services.chat_service import chat_service
+from app.core.database import get_db
+from sqlalchemy.orm import Session
+from app.api import deps
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,7 +18,11 @@ router = APIRouter()
 @router.post(
     "/ask", response_model=ChatResponse, summary="Ask a question about a paper"
 )
-async def ask_question(request: ChatRequest):
+async def ask_question(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(deps.get_current_user)
+):
     """
     Ask a question about a specific analyzed paper.
 
@@ -24,6 +31,8 @@ async def ask_question(request: ChatRequest):
     """
     try:
         response = await chat_service.ask_question(
+            db=db,
+            user_id=current_user.id,
             job_id=request.job_id,
             question=request.question,
             conversation_history=request.conversation_history,
@@ -38,14 +47,14 @@ async def ask_question(request: ChatRequest):
 
 
 @router.post("/index/{job_id}", summary="Index a paper for chat")
-async def index_paper(job_id: str):
+async def index_paper(job_id: str, db: Session = Depends(get_db)):
     """
     Manually trigger indexing of a paper for chat.
     Usually called automatically after analysis completes.
     """
     from app.services.queue_service import job_queue
 
-    job = job_queue.get_job(job_id)
+    job = job_queue.get_job(db, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -55,10 +64,20 @@ async def index_paper(job_id: str):
         )
 
     # Build paper data from result
+    # job.result is a dict now in new model, so we access keys
+    # But Pydantic model might be returned? No, get_job returns SQLAlchemy model.
+    # job.result is JSON/dict.
+    result = job.result
+    
+    # Handle both dict and object access just in case
+    title = result.get('metadata', {}).get('title') if isinstance(result, dict) else result.metadata.title
+    abstract = result.get('original_abstract') if isinstance(result, dict) else result.original_abstract
+    detailed_summary = result.get('detailed_summary') if isinstance(result, dict) else result.detailed_summary
+
     paper_data = {
-        "title": job.result.metadata.title,
-        "abstract": job.result.original_abstract or "",
-        "sections": job.result.detailed_summary or {},
+        "title": title,
+        "abstract": abstract or "",
+        "sections": detailed_summary or {},
     }
 
     success = chat_service.index_paper_for_chat(job_id, paper_data)

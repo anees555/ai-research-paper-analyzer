@@ -9,11 +9,20 @@ import logging
 from typing import Dict, Any, List, Optional
 
 from app.data_models.schemas import ChatMessage, ChatResponse, ChatSource
+from datetime import datetime
+from sqlalchemy.orm import Session
+from dataclasses import dataclass
+
+@dataclass
+class DocumentChunk:
+    """Compatibility class for VectorStore"""
+    text: str
+    metadata: Dict
+    chunk_id: str
 
 # Add semantic-document-search to path
-semantic_search_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../../../../semantic-document-search/src")
-)
+semantic_search_path = os.path.join(os.path.dirname(__file__), "../../../semantic-document-search/src")
+
 if semantic_search_path not in sys.path:
     sys.path.insert(0, semantic_search_path)
 
@@ -88,19 +97,22 @@ class ChatService:
         try:
             # Build text chunks from paper sections
             chunks = []
+            chunk_counter = 0
 
             # Add abstract
             if paper_data.get("abstract"):
                 chunks.append(
-                    {
-                        "text": paper_data["abstract"],
-                        "metadata": {
+                    DocumentChunk(
+                        text=paper_data["abstract"],
+                        metadata={
                             "job_id": job_id,
                             "section": "Abstract",
                             "source": paper_data.get("title", "Unknown"),
                         },
-                    }
+                        chunk_id=f"{job_id}_{chunk_counter}"
+                    )
                 )
+                chunk_counter += 1
 
             # Add sections
             for section_name, content in paper_data.get("sections", {}).items():
@@ -109,16 +121,18 @@ class ChatService:
                     section_chunks = self._chunk_text(content, max_size=800)
                     for i, chunk_text in enumerate(section_chunks):
                         chunks.append(
-                            {
-                                "text": chunk_text,
-                                "metadata": {
+                            DocumentChunk(
+                                text=chunk_text,
+                                metadata={
                                     "job_id": job_id,
                                     "section": section_name,
                                     "chunk_index": i,
                                     "source": paper_data.get("title", "Unknown"),
                                 },
-                            }
+                                chunk_id=f"{job_id}_{chunk_counter}"
+                            )
                         )
+                        chunk_counter += 1
 
             # Store paper context for quick access
             self._job_contexts[job_id] = {
@@ -130,11 +144,7 @@ class ChatService:
 
             # Add to vector store
             if chunks:
-                self._pipeline.vector_store.add_documents_batch(
-                    texts=[c["text"] for c in chunks],
-                    metadatas=[c["metadata"] for c in chunks],
-                    ids=[f"{job_id}_{i}" for i in range(len(chunks))],
-                )
+                self._pipeline.vector_store.add_documents(chunks)
 
             logger.info(f"Indexed {len(chunks)} chunks for job {job_id}")
             return True
@@ -167,6 +177,8 @@ class ChatService:
 
     async def ask_question(
         self,
+        db: Session,
+        user_id: Optional[str],
         job_id: str,
         question: str,
         conversation_history: Optional[List[ChatMessage]] = None,
@@ -175,6 +187,8 @@ class ChatService:
         Answer a question about a specific paper.
 
         Args:
+            db: Database session
+            user_id: Current user ID
             job_id: The paper's job ID
             question: User's question
             conversation_history: Previous messages for context
@@ -189,10 +203,10 @@ class ChatService:
             search_filter = {"job_id": job_id}
 
             results = self._pipeline.vector_store.search(
-                query=question, n_results=5, where=search_filter
+                query=question, n_results=5, filter_metadata=search_filter
             )
 
-            if not results or not results.get("documents"):
+            if not results or not results.get("results"):
                 return ChatResponse(
                     message="I don't have enough information about this paper to answer your question. The paper may not have been fully indexed.",
                     sources=[],
@@ -203,17 +217,12 @@ class ChatService:
             context_parts = []
             sources = []
 
-            for i, (doc, metadata, distance) in enumerate(
-                zip(
-                    results.get("documents", [[]])[0],
-                    results.get("metadatas", [[]])[0],
-                    results.get("distances", [[]])[0],
-                )
-            ):
-                similarity = 1 - (distance / 2)  # Convert distance to similarity
+            for item in results.get("results", []):
+                similarity = item.get("similarity", 0)
                 if similarity > 0.3:  # Only use relevant chunks
+                    metadata = item.get("metadata", {})
                     context_parts.append(
-                        f"[{metadata.get('section', 'Section')}]: {doc}"
+                        f"[{metadata.get('section', 'Section')}]: {item.get('text', '')}"
                     )
                     sources.append(
                         ChatSource(
@@ -223,7 +232,7 @@ class ChatService:
                     )
 
             context = "\n\n".join(context_parts)
-
+            
             # Generate response
             if self._groq_llm and context:
                 # Use Groq LLM for high-quality response
@@ -243,6 +252,33 @@ class ChatService:
                 confidence = (
                     sum(s.similarity for s in sources) / len(sources) if sources else 0
                 )
+
+            # Save to DB
+            from app.data_models.models import ChatHistory
+            import uuid
+            
+            # Save user message
+            user_msg = ChatHistory(
+                id=str(uuid.uuid4()),
+                job_id=job_id,
+                user_id=user_id,
+                sender="user",
+                message=question,
+                timestamp=datetime.utcnow()
+            )
+            db.add(user_msg)
+            
+            # Save AI response
+            ai_msg = ChatHistory(
+                id=str(uuid.uuid4()),
+                job_id=job_id,
+                user_id=user_id,
+                sender="ai",
+                message=answer,
+                timestamp=datetime.utcnow()
+            )
+            db.add(ai_msg)
+            db.commit()
 
             return ChatResponse(
                 message=answer,

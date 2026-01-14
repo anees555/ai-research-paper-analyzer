@@ -15,6 +15,9 @@ class Settings(BaseSettings):
         "http://localhost:8000",
     ]
 
+    # Database
+    DATABASE_URL: str = "postgresql://user:password@localhost/dbname"
+
     # File Uploads
     UPLOAD_DIR: str = "data/uploads"
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10 MB
@@ -22,6 +25,11 @@ class Settings(BaseSettings):
     # Model Settings (Can be overridden by env vars)
     ENABLE_AI_MODELS: bool = True
     MODEL_DEVICE: int = -1  # -1 for CPU, 0 for GPU
+
+    # Security
+    SECRET_KEY: str = "your-super-secret-key-change-this-in-production"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     class Config:
         case_sensitive = True

@@ -24,11 +24,10 @@ echo "🌐 Starting FastAPI server..."
 echo "📊 API will be available at: http://localhost:8000"
 echo "📚 API docs: http://localhost:8000/docs"
 
-# Use gunicorn for production, uvicorn for development
 if [ "$ENV" = "production" ]; then
-    echo "🏭 Running in production mode with Gunicorn..."
-    gunicorn -c gunicorn_config.py main:app
+    echo "🏭 Running in production mode with Uvicorn..."
+    uvicorn app.main:app --host 0.0.0.0 --port 8000
 else
     echo "🛠️ Running in development mode with Uvicorn..."
-    python main.py
+    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 fi
