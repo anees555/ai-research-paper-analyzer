@@ -1,120 +1,209 @@
-# AI Research Paper Analyzer
+# 🤖 AI Research Paper Analyzer
 
-Comprehensive research paper analysis platform combining automated summarization, semantic document search, and web-based API access. Built for researchers, academics, and data scientists who need efficient paper processing and intelligent document retrieval.
+An intelligent research paper analysis system powered by AI that processes academic PDFs to generate comprehensive summaries, extract metadata, and enable natural language conversations with research papers.
 
-## Overview
+## ✨ Features
 
-This project provides a complete research paper processing pipeline that transforms PDF documents into structured, searchable knowledge. The system combines traditional document processing with modern AI techniques to deliver both quick insights and deep analysis.
+- **🔍 Intelligent PDF Processing**: Uses GROBID for academic structure extraction
+- **🤖 AI-Powered Summaries**: Leverages BART and Longformer models for comprehensive analysis
+- **💬 Paper Chat**: RAG-powered conversations with uploaded papers using Groq API
+- **📊 Comprehensive Analysis**: Extracts metadata, authors, sections, and key insights
+- **🌐 Modern Web Interface**: Clean, responsive Next.js frontend
+- **⚡ Fast Processing**: Optimized pipeline for quick paper analysis
+- **🔒 Secure**: JWT authentication and proper security measures
 
-### Core Capabilities
+## 🛠️ Tech Stack
 
-The platform processes research papers and generates multiple types of output:
-- **Quick AI summaries** using BART model for immediate insights
-- **Comprehensive analysis** using Longformer model for detailed understanding
-- **Semantic document search** with vector embeddings and similarity matching
-- **Question-answering system** leveraging RAG (Retrieval-Augmented Generation)
-- **Rich metadata extraction** including authors, sections, and citation analysis
-- **RESTful API** for web application integration
+### Backend
+- **FastAPI**: Modern Python web framework
+- **PostgreSQL**: Database with SQLAlchemy ORM  
+- **GROBID**: Academic PDF parsing service
+- **Transformers**: BART & Longformer models for summarization
+- **ChromaDB**: Vector database for semantic search
+- **Groq API**: LLM integration for enhanced responses
 
-### Processing Reliability
+### Frontend  
+- **Next.js 16.1.1**: React framework with App Router
+- **TypeScript**: Type-safe development
+- **TailwindCSS**: Modern styling
+- **React Query**: Data fetching and caching
 
-Built with production reliability in mind, the system employs hybrid processing that combines GROBID structured extraction with PyPDF2 fallback processing, ensuring consistent results across diverse document formats and quality levels.
+## 🚀 Quick Start
 
-## Features
+### Prerequisites
+- Python 3.8+
+- Node.js 18+
+- Docker (for GROBID)
+- PostgreSQL database
 
-### Document Processing
-- **Hybrid PDF Processing**: Primary GROBID extraction with PyPDF2 fallback
-- **Batch Processing**: Handle multiple documents simultaneously
-- **Metadata Extraction**: Authors, sections, citations, and structural elements
-- **Format Preservation**: Maintains document structure and formatting context
+### 1. Clone the Repository
+```bash
+git clone https://github.com/anees555/ai-research-paper-analyzer.git
+cd ai-research-paper-analyzer
+```
 
-### AI-Powered Analysis
-- **Multi-Model Summarization**: BART for concise summaries, Longformer for detailed analysis
-- **Semantic Understanding**: Vector embeddings for document similarity and search
-- **Question Answering**: RAG-based system for document querying
-- **Contextual Retrieval**: Intelligent chunk selection and context assembly
+### 2. Environment Setup
+```bash
+# Copy environment template
+cp .env.example .env
 
-### Web Integration
-- **FastAPI Backend**: Production-ready API with async processing
-- **Task Management**: Background processing with status tracking
-- **File Upload**: Multi-format document upload and processing
-- **Response Formatting**: Structured JSON output for easy integration
+# Edit .env with your configurations:
+# - Database URL
+# - Groq API key  
+# - Other settings
+```
 
-### Semantic Search System
-- **Vector Storage**: ChromaDB for efficient similarity search
-- **Embedding Generation**: Sentence transformers for semantic understanding
-- **Interactive Queries**: Natural language document search and filtering
-- **Context Assembly**: Intelligent retrieval of relevant document sections
+### 3. Backend Setup
+```bash
+# Create virtual environment
+python -m venv research_env
+source research_env/bin/activate  # On Windows: research_env\Scripts\activate
 
-## Quick Start
+# Install dependencies
+pip install -r requirements.txt
+
+# Start GROBID service
+docker run -t --rm -p 8070:8070 lfoppiano/grobid:0.8.0
+
+# Start backend server
+cd backend
+python main.py
+```
+
+### 4. Frontend Setup
+```bash
+# Install dependencies
+cd frontend
+npm install
+
+# Start development server
+npm run dev
+```
+
+### 5. Access the Application
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+
+## 📝 Usage
+
+1. **Upload Papers**: Drag & drop PDF research papers on the homepage
+2. **Analysis**: Wait for AI processing (30-90 seconds depending on paper length)
+3. **View Results**: Explore summaries, metadata, and comprehensive analysis
+4. **Chat**: Ask questions about the paper using natural language
+5. **History**: Access previously analyzed papers
 
 ### Environment Setup
 
 1. **Create and activate virtual environment**:
    ```bash
-   # Use the provided activation script
-   .\activate_env.ps1
-   # Or manually activate
-   .\.venv\Scripts\Activate.ps1
-   ```
 
-2. **Install dependencies**:
-   ```bash
-   python -m pip install -r requirements.txt
-   ```
+## 🔧 Configuration
 
-### Basic Usage
-
-1. **Start GROBID server**:
-   ```bash
-   docker run --rm -p 8070:8070 lfoppiano/grobid:0.8.0
-   ```
-
-2. **Process documents**:
-   ```bash
-   # Add PDF files to data/papers/ directory
-   python main.py
-   ```
-
-3. **Run semantic search**:
-   ```bash
-   python semantic-document-search/app.py
-   ```
-
-4. **Start web API**:
-   ```bash
-   cd backend
-   python main.py
-   ```
-
-## Project Structure
-
-```
-├── src/                           # Core processing modules
-│   ├── hybrid_summary_generator.py    # Main document processor
-│   ├── ai_summary_generator.py        # AI summarization engine
-│   └── scripts/                      # Utility and processing scripts
-├── semantic-document-search/          # Semantic search system
-│   ├── app.py                        # Main search application
-│   ├── src/                          # Search processing modules
-│   └── document_qa.py                # Question-answering interface
-├── backend/                          # Web API and server components
-│   ├── main.py                       # FastAPI application
-│   └── backend/                      # Additional server utilities
-├── data/                            # Input and training data
-│   ├── papers/                       # PDF documents for processing
-│   └── datasets/                     # Training and reference datasets  
-├── outputs/                         # Generated analysis results
-│   └── hybrid_summaries/             # AI-generated summaries and reports
-├── models/                          # AI model cache and storage
-├── requirements.txt                 # Unified dependency specification
-└── main.py                         # Primary application entry point
+### Database Setup
+```sql
+CREATE DATABASE research_analyzer;
+-- Update DATABASE_URL in .env file
 ```
 
-## Usage Examples
+### API Keys
+- **Groq API**: Get your key from [console.groq.com](https://console.groq.com)
+- Add to `.env` as `GROQ_API_KEY=your_key_here`
 
-### Document Analysis
+## 📊 API Endpoints
+
+### Core Endpoints
+- `POST /api/v1/analysis/upload` - Upload and analyze paper
+- `GET /api/v1/analysis/status/{job_id}` - Check analysis status  
+- `POST /api/v1/chat/ask` - Chat with paper
+- `POST /api/v1/chat/index/{job_id}` - Index paper for chat
+
+### Authentication
+- `POST /api/v1/auth/login/access-token` - User login
+- `GET /api/v1/users/me` - Get current user
+
+## 🏗️ Project Structure
+
+```
+├── backend/                 # FastAPI backend
+│   ├── app/
+│   │   ├── api/            # API routes
+│   │   ├── core/           # Configuration & security
+│   │   ├── data_models/    # Pydantic schemas
+│   │   └── services/       # Business logic
+│   └── main.py             # Application entry point
+├── frontend/               # Next.js frontend  
+│   ├── src/
+│   │   ├── app/            # App router pages
+│   │   ├── components/     # React components
+│   │   ├── hooks/          # Custom hooks
+│   │   ├── lib/            # Utilities
+│   └── types/              # TypeScript definitions
+├── src/                    # Core processing scripts
+├── semantic-document-search/  # RAG implementation
+└── data/                   # Upload and processing data
+```
+
+## 🧪 Testing
+
 ```bash
+# Backend tests
+cd backend
+python -m pytest
+
+# Frontend tests  
+cd frontend
+npm test
+
+# API tests
+python test_complete_api.py
+```
+
+## 🚀 Deployment
+
+### Using Docker
+```bash
+# Build images
+docker-compose build
+
+# Start services
+docker-compose up -d
+```
+
+### Manual Deployment
+1. Set up production database
+2. Configure environment variables
+3. Deploy backend to server (e.g., Heroku, DigitalOcean)
+4. Deploy frontend to Vercel/Netlify
+5. Start GROBID service
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)  
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **GROBID** for academic PDF parsing
+- **Hugging Face** for transformer models
+- **Groq** for fast LLM inference
+- **OpenAI** for inspiration and methodologies
+
+## 📬 Support
+
+- Create an [Issue](https://github.com/anees555/ai-research-paper-analyzer/issues)
+- Documentation: Check `/docs` endpoint when running
+
+---
+
+**Made with ❤️ for the research community**
 # Process all PDFs in data/papers/ directory
 python main.py
 ```
