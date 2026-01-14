@@ -17,6 +17,10 @@ env.bak/
 venv.bak/
 .aienv/
 .aienv*/
+vectorenv/
+research_env/
+*env*/
+*venv*/
 
 # Python environment configuration
 pyvenv.cfg

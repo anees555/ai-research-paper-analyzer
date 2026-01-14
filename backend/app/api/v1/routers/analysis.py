@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 from app.api import deps
 from typing import Optional
 import asyncio
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 async def process_analysis_task(job_id: str, file_path: str):
@@ -25,6 +27,23 @@ async def process_analysis_task(job_id: str, file_path: str):
         
         # Update status to completed
         job_queue.update_job(db, job_id, JobStatus.COMPLETED, result=result)
+        
+        # Try to index for chat (non-blocking)
+        try:
+            from app.services.chat_service import chat_service
+            # Get the stored paper data from analysis service
+            paper_data = analysis_service.get_paper_data(job_id)
+            if paper_data:
+                success = chat_service.index_paper_for_chat(job_id, paper_data)
+                if success:
+                    logger.info(f"Paper {job_id} indexed for chat successfully")
+                else:
+                    logger.warning(f"Failed to index paper {job_id} for chat")
+            else:
+                logger.warning(f"No paper data found for job {job_id} to index for chat")
+        except Exception as e:
+            logger.error(f"Chat indexing failed for {job_id}: {e}")
+            # Don't fail the entire analysis just because chat indexing failed
         
     except Exception as e:
         job_queue.update_job(db, job_id, JobStatus.FAILED, error=str(e))

@@ -20,7 +20,15 @@ logger = logging.getLogger(__name__)
 class AnalysisService:
     def __init__(self):
         self.model_engine = model_engine
+        self._paper_data_cache = {}  # Store paper data for chat indexing
 
+    def get_paper_data(self, job_id: str):
+        """Get stored paper data for a job"""
+        return self._paper_data_cache.get(job_id)
+        
+    def _store_paper_data(self, job_id: str, paper_data: Dict):
+        """Store paper data for later use by chat service"""
+        self._paper_data_cache[job_id] = paper_data
     async def analyze_paper(self, file_path: str, job_id: str) -> AnalysisResult:
         """
         Main entry point for analyzing a paper.
@@ -32,6 +40,9 @@ class AnalysisService:
             # using 'output' dir relative to root or temp? 
             # We'll use a temp dir or standard output dir.
             paper_data = parse_pdf_with_grobid(file_path, "output")
+            
+            # Store paper data for chat indexing
+            self._store_paper_data(job_id, paper_data)
             
             # 2. Generate Summaries
             summarizer = self.model_engine.get_summarizer()

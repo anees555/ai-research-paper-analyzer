@@ -66,9 +66,16 @@ class ChatService:
             # Try to initialize Groq LLM if API key is available
             try:
                 from groq_llm_interface import GroqLLMInterface
+                import os
 
-                self._groq_llm = GroqLLMInterface()
-                logger.info("Groq LLM initialized for enhanced responses")
+                # Check if API key is properly configured
+                groq_api_key = os.getenv('GROQ_API_KEY')
+                if groq_api_key and groq_api_key != 'your_groq_api_key_here':
+                    self._groq_llm = GroqLLMInterface()
+                    logger.info("Groq LLM initialized for enhanced responses")
+                else:
+                    logger.info("Groq API key not configured, using simple QA mode")
+                    self._groq_llm = None
             except Exception as e:
                 logger.warning(f"Groq LLM not available, using simple QA: {e}")
                 self._groq_llm = None
@@ -145,9 +152,11 @@ class ChatService:
             # Add to vector store
             if chunks:
                 self._pipeline.vector_store.add_documents(chunks)
-
-            logger.info(f"Indexed {len(chunks)} chunks for job {job_id}")
-            return True
+                logger.info(f"Successfully indexed {len(chunks)} chunks for job {job_id}")
+                return True
+            else:
+                logger.warning(f"No chunks to index for job {job_id}")
+                return False
 
         except Exception as e:
             logger.error(f"Failed to index paper for chat: {e}")
