@@ -11,13 +11,46 @@ import {
   JobSummary
 } from "@/types/api";
 
+// Processing mode types
+export type ProcessingMode = "fast" | "balanced" | "comprehensive" | "enhanced";
+
+export interface ProcessingModeInfo {
+  name: string;
+  estimated_time: string;
+  description: string;
+  features: string[];
+  ai_models: boolean | string;
+  recommended_for: string;
+}
+
+export interface InstantAnalysisResponse {
+  status: string;
+  processing_mode: ProcessingMode;
+  analysis_result: AnalysisResult;
+  processing_info: {
+    instant_processing: boolean;
+    estimated_time: string;
+  };
+}
+
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003/api/v1";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 300_000, // 300 second timeout for large files
 });
+
+// Add connection test function
+export const testConnection = async (): Promise<boolean> => {
+  try {
+    const response = await api.get('/analysis/modes');
+    return response.status === 200;
+  } catch (error) {
+    console.error('Backend connection test failed:', error);
+    return false;
+  }
+};
 
 // Add auth interceptor
 api.interceptors.request.use((config) => {
@@ -59,14 +92,75 @@ export const logout = () => {
     window.location.href = '/login';
 };
 
-export const uploadPaper = async (file: File): Promise<JobResponse> => {
+export const uploadPaper = async (
+  file: File,
+  mode: ProcessingMode = "enhanced"
+): Promise<JobResponse> => {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await api.post("/analysis/upload", formData, {
+  
+  const response = await api.post(`/analysis/upload?mode=${mode}`, formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
   });
+  return response.data;
+};
+
+export const uploadPaperEnhanced = async (
+  file: File
+): Promise<JobResponse> => {
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  const response = await api.post(`/analysis/enhanced`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
+};
+
+export const uploadPaperProfessional = async (
+  file: File
+): Promise<JobResponse> => {
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  const response = await api.post(`/analysis/professional`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
+};
+
+export const uploadPaperInstant = async (
+  file: File,
+  mode: ProcessingMode = "enhanced"
+): Promise<InstantAnalysisResponse> => {
+  if (mode === "comprehensive") {
+    throw new Error("Comprehensive mode requires background processing. Use uploadPaper instead.");
+  }
+  
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  const response = await api.post(`/analysis/analyze-instant?mode=${mode}`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
+};
+
+export const getProcessingModes = async (): Promise<{
+  modes: Record<ProcessingMode, ProcessingModeInfo>;
+  default_mode: ProcessingMode;
+  instant_analysis_supported: ProcessingMode[];
+  background_processing_required: ProcessingMode[];
+}> => {
+  const response = await api.get("/analysis/modes");
   return response.data;
 };
 

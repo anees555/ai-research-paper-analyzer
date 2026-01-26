@@ -11,7 +11,7 @@ if src_path not in sys.path:
 
 
 from app.data_models.schemas import AnalysisResult, PaperMetadata
-from app.services.model_loader import model_engine
+from app.services.optimized_model_loader import optimized_model_engine
 from scripts.parse_pdf_optimized import parse_pdf_with_grobid_optimized as parse_pdf_with_grobid
 from scripts.preprocess_text import clean_text_comprehensive, chunk_text_for_models
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class AnalysisService:
     def __init__(self):
-        self.model_engine = model_engine
+        self.model_engine = optimized_model_engine
         self._paper_data_cache = {}  # Store paper data for chat indexing
 
     def get_paper_data(self, job_id: str):
@@ -41,16 +41,28 @@ class AnalysisService:
             # We'll use a temp dir or standard output dir.
             paper_data = parse_pdf_with_grobid(file_path, "output")
             
+            # Add paper_id to the paper_data for consistency
+            if "paper_id" not in paper_data:
+                paper_data["paper_id"] = os.path.basename(file_path).replace('.pdf', '')
+            
             # Store paper data for chat indexing
             self._store_paper_data(job_id, paper_data)
             
             # 2. Generate Enhanced Summaries
-            summarizer = self.model_engine.get_summarizer()
+            try:
+                summarizer = await self.model_engine.get_full_summarizer()
+            except Exception as e:
+                logger.warning(f"Failed to load full summarizer, trying lightweight: {e}")
+                try:
+                    summarizer = await self.model_engine.get_lightweight_summarizer()
+                except Exception as e2:
+                    logger.warning(f"Failed to load lightweight summarizer, using extractive methods: {e2}")
+                    summarizer = None
             
             # Generate traditional summaries
-            quick_summary = self._generate_quick_summary(paper_data, summarizer)
-            detailed = self._generate_detailed_summary(paper_data, summarizer)
-            comprehensive = self._generate_comprehensive_analysis(paper_data, summarizer)
+            quick_summary = await self._generate_quick_summary(paper_data, summarizer)
+            detailed = await self._generate_detailed_summary(paper_data, summarizer)
+            comprehensive = await self._generate_comprehensive_analysis(paper_data, summarizer)
             
             # 3. Construct Result
             metadata = PaperMetadata(
@@ -73,7 +85,7 @@ class AnalysisService:
             logger.error(f"Analysis failed for {job_id}: {e}")
             raise e
 
-    def _generate_quick_summary(self, paper_data: Dict, summarizer) -> str:
+    async def _generate_quick_summary(self, paper_data: Dict, summarizer) -> str:
         abstract = paper_data.get("abstract", "")
         if not abstract:
             return "No abstract available."
@@ -89,7 +101,7 @@ class AnalysisService:
                 return clean_abs[:200] + "..."
         return clean_abs[:200] + "..."
 
-    def _generate_detailed_summary(self, paper_data: Dict, summarizer) -> Dict[str, str]:
+    async def _generate_detailed_summary(self, paper_data: Dict, summarizer) -> Dict[str, str]:
         detailed = {}
         sections = paper_data.get("sections", {})
         key_sections = ["Introduction", "Methods", "Results", "Conclusion"]
@@ -117,7 +129,7 @@ class AnalysisService:
                 
         return detailed
 
-    def _generate_comprehensive_analysis(self, paper_data: Dict, summarizer) -> Dict[str, Any]:
+    async def _generate_comprehensive_analysis(self, paper_data: Dict, summarizer) -> Dict[str, Any]:
         # Similar to original logic
         analysis = {}
         sections = paper_data.get("sections", {})

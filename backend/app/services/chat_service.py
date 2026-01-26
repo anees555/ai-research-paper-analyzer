@@ -77,7 +77,7 @@ class ChatService:
 
                 # Check if API key is properly configured
                 groq_api_key = os.getenv('GROQ_API_KEY')
-                print(f"🔑 Groq API key found: {bool(groq_api_key and groq_api_key != 'your_groq_api_key_here')}")  # Debug log
+                print(f"[DEBUG] Groq API key found: {bool(groq_api_key and groq_api_key != 'your_groq_api_key_here')}")  # Debug log
                 if groq_api_key and groq_api_key != 'your_groq_api_key_here':
                     self._groq_llm = GroqLLMInterface()
                     logger.info("Groq LLM initialized for enhanced responses")

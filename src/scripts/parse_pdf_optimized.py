@@ -65,21 +65,21 @@ class OptimizedGROBIDProcessor:
                 try:
                     response = requests.get(f"{self.base_url}{endpoint}", timeout=10)
                     if response.status_code == 200 and "true" in response.text.lower():
-                        logger.info(f"✅ GROBID server is healthy and responsive (endpoint: {endpoint})")
+                        logger.info(f"[SUCCESS] GROBID server is healthy and responsive (endpoint: {endpoint})")
                         return True
                         
                 except requests.exceptions.RequestException:
                     continue  # Try next endpoint
             
             # If no endpoint worked, wait and retry
-            logger.warning(f"⚠️ GROBID connection attempt {attempt + 1}/{max_retries} failed")
+            logger.warning(f"[WARNING] GROBID connection attempt {attempt + 1}/{max_retries} failed")
             
             if attempt < max_retries - 1:
                 delay = retry_delays[attempt]
                 logger.info(f"⏳ Waiting {delay} seconds before retry...")
                 time.sleep(delay)
         
-        logger.error("❌ GROBID server is not reachable after all retries")
+        logger.error("[ERROR] GROBID server is not reachable after all retries")
         return False
     
     def process_pdf_with_strategy(self, pdf_path: str, strategy: str = None) -> requests.Response:
@@ -92,7 +92,7 @@ class OptimizedGROBIDProcessor:
         timeout = self.timeout_strategies[strategy]
         file_size = os.path.getsize(pdf_path) / (1024 * 1024)  # MB
         
-        logger.info(f"📊 PDF Analysis: {file_size:.1f}MB → Using '{strategy}' strategy ({timeout}s timeout)")
+        logger.info(f"[STATS] PDF Analysis: {file_size:.1f}MB → Using '{strategy}' strategy ({timeout}s timeout)")
         
         url = f"{self.base_url}/api/processFulltextDocument"
         
@@ -104,7 +104,7 @@ class OptimizedGROBIDProcessor:
                 'generateIDs': '1'
             }
             
-            logger.info(f"🚀 Sending PDF to GROBID (timeout: {timeout}s)...")
+            logger.info(f"[INIT] Sending PDF to GROBID (timeout: {timeout}s)...")
             start_time = time.time()
             
             try:
@@ -117,13 +117,13 @@ class OptimizedGROBIDProcessor:
                 )
                 
                 processing_time = time.time() - start_time
-                logger.info(f"⏱️ Processing completed in {processing_time:.1f}s")
+                logger.info(f"[TIME] Processing completed in {processing_time:.1f}s")
                 
                 return response
                 
             except requests.exceptions.Timeout:
                 processing_time = time.time() - start_time
-                logger.warning(f"⏰ Timeout after {processing_time:.1f}s with '{strategy}' strategy")
+                logger.warning(f"[TIMEOUT] Timeout after {processing_time:.1f}s with '{strategy}' strategy")
                 raise
     
     def process_with_fallback_strategies(self, pdf_path: str) -> requests.Response:
@@ -147,33 +147,33 @@ class OptimizedGROBIDProcessor:
         
         for i, strategy in enumerate(strategies):
             try:
-                logger.info(f"🎯 Attempt {i+1}/{len(strategies)}: Trying '{strategy}' strategy")
+                logger.info(f"[TARGET] Attempt {i+1}/{len(strategies)}: Trying '{strategy}' strategy")
                 response = self.process_pdf_with_strategy(pdf_path, strategy)
                 
                 if response.status_code == 200:
-                    logger.info(f"✅ Success with '{strategy}' strategy!")
+                    logger.info(f"[SUCCESS] Success with '{strategy}' strategy!")
                     return response
                 else:
-                    logger.warning(f"❌ Failed with status {response.status_code}")
+                    logger.warning(f"[FAILED] Failed with status {response.status_code}")
                     
             except requests.exceptions.Timeout as e:
                 last_error = e
-                logger.warning(f"⏰ '{strategy}' strategy timed out")
+                logger.warning(f"[TIMEOUT] '{strategy}' strategy timed out")
                 continue
             except Exception as e:
                 last_error = e
-                logger.error(f"❌ Error with '{strategy}' strategy: {e}")
+                logger.error(f"[ERROR] Error with '{strategy}' strategy: {e}")
                 continue
         
         # All strategies failed
-        logger.error("💥 All timeout strategies failed")
+        logger.error("[ERROR] All timeout strategies failed")
         raise last_error or Exception("All processing strategies exhausted")
     
     def parse_pdf_optimized(self, pdf_path: str, output_dir: str) -> Dict[str, Any]:
         """
         Main optimized PDF parsing function
         """
-        logger.info(f"📄 Starting optimized processing: {os.path.basename(pdf_path)}")
+        logger.info(f"[INFO] Starting optimized processing: {os.path.basename(pdf_path)}")
         
         # Validate inputs
         if not os.path.exists(pdf_path):
@@ -203,14 +203,14 @@ class OptimizedGROBIDProcessor:
                 f.write(response.text)
             
             xml_size = len(response.text)
-            logger.info(f"💾 Saved TEI XML: {output_file} ({xml_size:,} chars)")
+            logger.info(f"[SAVED] Saved TEI XML: {output_file} ({xml_size:,} chars)")
             
             # Parse XML and extract data
-            logger.info("📑 Parsing TEI XML structure...")
+            logger.info("[PARSING] Parsing TEI XML structure...")
             return self.parse_tei_xml(response.text)
             
         except Exception as e:
-            logger.error(f"💥 Optimized processing failed: {e}")
+            logger.error(f"[ERROR] Optimized processing failed: {e}")
             raise
     
     def parse_tei_xml(self, xml_content: str) -> Dict[str, Any]:
@@ -245,23 +245,50 @@ class OptimizedGROBIDProcessor:
                         abstract_parts.append(p.text.strip())
                 abstract = " ".join(abstract_parts)
             
-            # Extract sections
+            # Extract sections with improved traversal and filtering
             sections = {}
             body = root.find(".//tei:body", ns)
             if body is not None:
-                for div in body.findall(".//tei:div", ns):
+                # Get all div elements, including nested ones
+                all_divs = body.findall(".//tei:div", ns)
+                logger.info(f"[SEARCH] Found {len(all_divs)} div elements in document body")
+                
+                for div in all_divs:
                     head = div.find("tei:head", ns)
                     if head is not None and head.text:
                         section_title = head.text.strip()
                         
-                        # Extract section content
-                        section_content = []
-                        for p in div.findall(".//tei:p", ns):
-                            if p.text:
-                                section_content.append(p.text.strip())
+                        # Skip figure/table captions and very short headings that are likely not real sections
+                        if len(section_title) < 3:  # Skip 1-2 char headers like "The", "A", etc.
+                            logger.warning(f"[WARNING]  Skipping very short section title: '{section_title}'")
+                            continue
                         
-                        if section_content:
-                            sections[section_title] = " ".join(section_content)
+                        # Extract section content from paragraphs directly under this div
+                        section_content = []
+                        for p in div.findall("tei:p", ns):  # Direct children only
+                            if p.text:
+                                # Get full text content including nested elements
+                                full_text = ''.join(p.itertext()).strip()
+                                if full_text and len(full_text) > 10:  # Only meaningful content
+                                    section_content.append(full_text)
+                        
+                        # Also check for nested paragraphs
+                        for nested_div in div.findall("tei:div", ns):
+                            for p in nested_div.findall(".//tei:p", ns):
+                                if p.text:
+                                    full_text = ''.join(p.itertext()).strip()
+                                    if full_text and len(full_text) > 10:
+                                        section_content.append(full_text)
+                        
+                        # Only add section if it has substantial content (at least 50 chars total)
+                        combined_content = " ".join(section_content)
+                        if len(combined_content) >= 50:
+                            sections[section_title] = combined_content
+                            logger.info(f"[SUCCESS] Extracted section: '{section_title}' ({len(section_content)} paragraphs, {len(combined_content)} chars)")
+                        else:
+                            logger.warning(f"[WARNING]  Skipping section with insufficient content: '{section_title}' ({len(combined_content)} chars)")
+                
+                logger.info(f"[STATS] Total valid sections extracted: {len(sections)}")
             
             result = {
                 "title": title,
@@ -276,14 +303,14 @@ class OptimizedGROBIDProcessor:
                 }
             }
             
-            logger.info(f"📊 Extraction complete: {len(sections)} sections, {len(authors)} authors")
+            logger.info(f"[STATS] Extraction complete: {len(sections)} sections, {len(authors)} authors")
             return result
             
         except ET.ParseError as e:
-            logger.error(f"❌ TEI XML parsing failed: {e}")
+            logger.error(f"[ERROR] TEI XML parsing failed: {e}")
             raise Exception(f"Invalid TEI XML structure: {e}")
         except Exception as e:
-            logger.error(f"❌ TEI processing error: {e}")
+            logger.error(f"[ERROR] TEI processing error: {e}")
             raise
 
 # Main function for backward compatibility
@@ -306,7 +333,7 @@ def test_optimization():
     
     # Test health check
     if not processor.check_grobid_health():
-        print("❌ GROBID server not available for testing")
+        print("[ERROR] GROBID server not available for testing")
         return
     
     # Find test PDF
@@ -321,18 +348,18 @@ def test_optimization():
                 break
     
     if not test_pdf:
-        print("❌ No test PDFs found")
+        print("[ERROR] No test PDFs found")
         return
     
-    print(f"📄 Testing with: {os.path.basename(test_pdf)}")
+    print(f"[INFO] Testing with: {os.path.basename(test_pdf)}")
     
     try:
         result = processor.parse_pdf_optimized(test_pdf, "output_test")
-        print(f"✅ Success! Extracted {len(result['sections'])} sections")
-        print(f"📊 Title: {result['title'][:100]}...")
+        print(f"[SUCCESS] Success! Extracted {len(result['sections'])} sections")
+        print(f"[STATS] Title: {result['title'][:100]}...")
         
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+        print(f"[ERROR] Test failed: {e}")
 
 if __name__ == "__main__":
     test_optimization()

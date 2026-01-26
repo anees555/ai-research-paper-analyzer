@@ -1,6 +1,7 @@
 "use client";
 
 import { FileUpload } from "@/components/upload/file-upload";
+import { ConnectionStatus } from "@/components/status/connection-status";
 import { BookOpen, FileText, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -14,6 +15,11 @@ export default function Home() {
       <Navbar />
       
       <div className="flex-1 flex flex-col items-center justify-center p-6 pb-20">
+        {/* Connection Status */}
+        <div className="w-full max-w-2xl mb-6 flex justify-center">
+          <ConnectionStatus />
+        </div>
+        
         <div className="w-full max-w-2xl text-center mb-10 space-y-4">
             <h2 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
                 Analyze Papers at <span className="text-blue-600">Light Speed</span>
@@ -73,6 +79,12 @@ function Navbar() {
           </h1>
         </Link>
         <div className="flex items-center gap-4">
+          <Link
+            href="/status"
+            className="text-xs font-medium text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50"
+          >
+            System Status
+          </Link>
           {isLoading ? (
             <div className="w-8 h-8 rounded-full bg-gray-100 animate-pulse" />
           ) : user ? (
