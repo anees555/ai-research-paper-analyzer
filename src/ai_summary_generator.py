@@ -129,7 +129,8 @@ class AIPoweredSummaryGenerator:
                                 
                                 detailed_summary[section_name] = " ".join(summary_parts)
                             else:
-                                detailed_summary[section_name] = cleaned_text[:300] + "..."
+                                # Keep full content for fallback
+                                detailed_summary[section_name] = cleaned_text
                                 
                         except Exception as e:
                             print(f"❌ Error summarizing {section_name}: {e}")

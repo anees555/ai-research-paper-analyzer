@@ -17,8 +17,15 @@ from dataclasses import dataclass
 class DocumentChunk:
     """Compatibility class for VectorStore"""
     text: str
-    metadata: Dict
+    metadata: Dict[str, Any]
     chunk_id: str
+    
+    # Optional attributes for compatibility
+    def __post_init__(self):
+        if not hasattr(self, 'source'):
+            self.source = self.metadata.get('source', '')
+        if not hasattr(self, 'doc_id'):
+            self.doc_id = self.metadata.get('job_id', '')
 
 # Add semantic-document-search to path
 semantic_search_path = os.path.join(os.path.dirname(__file__), "../../../semantic-document-search/src")
@@ -53,7 +60,10 @@ class ChatService:
             # Add the semantic search directory to Python path
             semantic_search_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'semantic-document-search', 'src'))
             if semantic_search_path not in sys.path:
-                sys.path.append(semantic_search_path)
+                sys.path.insert(0, semantic_search_path)
+            
+            logger.info(f"Adding semantic search path: {semantic_search_path}")
+            logger.info(f"Path exists: {os.path.exists(semantic_search_path)}")
             
             from integrated_pipeline import DocumentSearchPipeline
             from simple_qa_pipeline import SimpleQAPipeline
@@ -110,6 +120,11 @@ class ChatService:
         self._lazy_init()
 
         try:
+            logger.info(f"Starting to index paper {job_id} for chat")
+            logger.info(f"Paper title: {paper_data.get('title', 'Unknown')}")
+            logger.info(f"Abstract length: {len(paper_data.get('abstract', ''))}")
+            logger.info(f"Sections: {list(paper_data.get('sections', {}).keys())}")
+            
             # Build text chunks from paper sections
             chunks = []
             chunk_counter = 0
@@ -128,6 +143,7 @@ class ChatService:
                     )
                 )
                 chunk_counter += 1
+                logger.info(f"Added abstract chunk")
 
             # Add sections
             for section_name, content in paper_data.get("sections", {}).items():
@@ -229,6 +245,7 @@ class ChatService:
                     message="I don't have enough information about this paper to answer your question. The paper may not have been fully indexed.",
                     sources=[],
                     confidence=0.0,
+                    timestamp=datetime.utcnow()
                 )
 
             # Build context from results with lower threshold
@@ -249,21 +266,49 @@ class ChatService:
                         )
                     )
 
+            # Check if we have any context
+            if not context_parts:
+                logger.warning(f"No context found for job {job_id}, question: {question[:50]}")
+                return ChatResponse(
+                    message="I found the paper, but couldn't find relevant information to answer your specific question. Try rephrasing or asking about a different aspect of the paper.",
+                    sources=[],
+                    confidence=0.0,
+                    timestamp=datetime.utcnow()
+                )
+
             context = "\n\n".join(context_parts)
             
             # Generate response
             if self._groq_llm and context:
                 # Use Groq LLM for high-quality response
-                response = self._groq_llm.generate_response(
-                    question=question,
-                    context=context,
-                    system_prompt=self._get_system_prompt(job_id, conversation_history),
-                )
-                answer = response.get("response", response.get("text", ""))
-                confidence = min(
-                    0.95,
-                    sum(s.similarity for s in sources) / len(sources) if sources else 0,
-                )
+                try:
+                    logger.info(f"Calling Groq LLM for question: {question[:50]}...")
+                    response = self._groq_llm.generate_response(
+                        question=question,
+                        context=context,
+                        system_prompt=self._get_system_prompt(job_id, conversation_history),
+                    )
+                    logger.info(f"Groq response received: {response.get('success', False)}")
+                    
+                    if not response.get("success", False):
+                        logger.warning(f"Groq LLM failed, using fallback. Error: {response.get('error')}")
+                        answer = self._generate_simple_answer(question, context_parts)
+                    else:
+                        answer = response.get("response", "")
+                        if not answer:
+                            logger.warning("Empty response from Groq, using fallback")
+                            answer = self._generate_simple_answer(question, context_parts)
+                    
+                    confidence = min(
+                        0.95,
+                        sum(s.similarity for s in sources) / len(sources) if sources else 0,
+                    )
+                except Exception as llm_error:
+                    logger.error(f"Error calling Groq LLM: {llm_error}")
+                    answer = self._generate_simple_answer(question, context_parts)
+                    confidence = (
+                        sum(s.similarity for s in sources) / len(sources) if sources else 0
+                    )
             else:
                 # Fallback to simple context-based answer
                 answer = self._generate_simple_answer(question, context_parts)
@@ -271,52 +316,56 @@ class ChatService:
                     sum(s.similarity for s in sources) / len(sources) if sources else 0
                 )
 
-            # Save to DB
-            from app.data_models.models import ChatHistory
-            import uuid
-            
-            # Save user message
-            user_msg = ChatHistory(
-                id=str(uuid.uuid4()),
-                job_id=job_id,
-                user_id=user_id,
-                sender="user",
-                message=question,
-                timestamp=datetime.utcnow()
-            )
-            db.add(user_msg)
-            
-            # Save AI response
-            ai_msg = ChatHistory(
-                id=str(uuid.uuid4()),
-                job_id=job_id,
-                user_id=user_id,
-                sender="ai",
-                message=answer,
-                timestamp=datetime.utcnow()
-            )
-            db.add(ai_msg)
-            db.commit()
+            # Save to DB (non-blocking - don't fail if DB save fails)
+            try:
+                from app.data_models.models import ChatHistory
+                import uuid
+                
+                # Save user message
+                user_msg = ChatHistory(
+                    id=str(uuid.uuid4()),
+                    job_id=job_id,
+                    user_id=user_id,
+                    sender="user",
+                    message=question,
+                    timestamp=datetime.utcnow()
+                )
+                db.add(user_msg)
+                
+                # Save AI response
+                ai_msg = ChatHistory(
+                    id=str(uuid.uuid4()),
+                    job_id=job_id,
+                    user_id=user_id,
+                    sender="ai",
+                    message=answer,
+                    timestamp=datetime.utcnow()
+                )
+                db.add(ai_msg)
+                db.commit()
+                logger.info(f"Chat history saved for job {job_id}")
+            except Exception as db_error:
+                logger.warning(f"Failed to save chat history to database: {db_error}")
+                # Don't fail the entire request if DB save fails
+                db.rollback()
 
             return ChatResponse(
                 message=answer,
                 sources=sources[:3],  # Top 3 sources
                 confidence=round(confidence, 2),
+                timestamp=datetime.utcnow()
             )
 
         except Exception as e:
+            import traceback
             logger.error(f"Error answering question: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return ChatResponse(
-                message="I encountered an error while processing your question. Please try again.",
+                message=f"I encountered an error while processing your question: {str(e)}. Please try again.",
                 sources=[],
                 confidence=0.0,
+                timestamp=datetime.utcnow()
             )
-
-    def _get_system_prompt(
-        self, job_id: str, history: Optional[List[ChatMessage]] = None
-    ) -> str:
-        """Generate system prompt with paper context"""
-        paper_info = self._job_contexts.get(job_id, {})
 
     def _get_system_prompt(
         self, job_id: str, history: Optional[List[ChatMessage]] = None

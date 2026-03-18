@@ -33,6 +33,21 @@ class SectionSummary(BaseModel):
     content: str
 
 
+class TOCSection(BaseModel):
+    """Hierarchical table of contents section"""
+    title: str
+    level: int  # 0=abstract, 1=section, 2=subsection, 3=sub-subsection
+    number: Optional[str] = None  # e.g., "1.2.3"
+    content: str  # Original section content
+    summary: Optional[str] = None  # AI-generated summary
+    page: Optional[int] = None
+    children: List["TOCSection"] = Field(default_factory=list)  # Nested sections
+
+
+# Update forward references
+TOCSection.model_rebuild()
+
+
 class PaperMetadata(BaseModel):
     title: str = "Unknown"
     authors: List[str] = []
@@ -46,7 +61,8 @@ class AnalysisResult(BaseModel):
     quick_summary: Optional[str] = None
     detailed_summary: Optional[Dict[str, str]] = None
     comprehensive_analysis: Optional[Dict[str, Any]] = None
-    original_abstract: Optional[str] = None  # Add enhanced summary field
+    original_abstract: Optional[str] = None
+    table_of_contents: Optional[List[TOCSection]] = None  # Hierarchical TOC with summaries
 
 
 class JobResponse(BaseModel):

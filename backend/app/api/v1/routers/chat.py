@@ -21,7 +21,7 @@ router = APIRouter()
 async def ask_question(
     request: ChatRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(deps.get_current_user)
+    current_user = Depends(deps.get_current_user_optional)
 ):
     """
     Ask a question about a specific analyzed paper.
@@ -30,9 +30,11 @@ async def ask_question(
     an intelligent response based on the paper's content.
     """
     try:
+        # Support both authenticated and guest users
+        user_id = current_user.id if current_user else None
         response = await chat_service.ask_question(
             db=db,
-            user_id=current_user.id,
+            user_id=user_id,
             job_id=request.job_id,
             question=request.question,
             conversation_history=request.conversation_history,

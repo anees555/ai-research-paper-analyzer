@@ -130,6 +130,15 @@ export function PaperChat({ jobId, paperTitle }: PaperChatProps) {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
       console.error("Failed to get response:", err);
+      // Log more details for debugging
+      if (err instanceof Error) {
+        console.error("Error name:", err.name);
+        console.error("Error message:", err.message);
+      }
+      if (err && typeof err === 'object' && 'response' in err) {
+        console.error("Response status:", (err as any).response?.status);
+        console.error("Response data:", (err as any).response?.data);
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -331,7 +340,7 @@ export function PaperChat({ jobId, paperTitle }: PaperChatProps) {
                       <button
                         key={i}
                         onClick={() => handleSuggestionClick(q)}
-                        className="text-xs bg-white border rounded-lg px-3 py-1.5 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                        className="text-xs text-gray-900 bg-white border rounded-lg px-3 py-1.5 hover:bg-blue-50 hover:border-blue-200 transition-colors"
                       >
                         {q}
                       </button>
@@ -356,7 +365,7 @@ export function PaperChat({ jobId, paperTitle }: PaperChatProps) {
               placeholder="Ask a question about this paper..."
               disabled={!isReady || isLoading}
               className={cn(
-                "flex-1 px-4 py-3 border rounded-xl text-sm",
+                "flex-1 px-4 py-3 border rounded-xl text-sm text-gray-900",
                 "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
                 "disabled:bg-gray-100 disabled:cursor-not-allowed"
               )}

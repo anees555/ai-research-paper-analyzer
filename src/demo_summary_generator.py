@@ -78,10 +78,7 @@ class DemoSummaryGenerator:
         summary_paragraphs = paragraphs[:min(3, len(paragraphs))]
         quick_summary = " ".join(summary_paragraphs)
         
-        # Truncate if too long
-        if len(quick_summary) > 500:
-            quick_summary = quick_summary[:500] + "..."
-        
+        # Keep full summary
         return quick_summary
     
     def generate_detailed_summary(self, paper_data: Dict[str, Any]) -> Dict[str, str]:
@@ -105,10 +102,10 @@ class DemoSummaryGenerator:
             "conclusion": " ".join(paragraphs[3*total_paragraphs//4:])
         }
         
-        # Truncate each section
+        # Truncate each section if extremely long (e.g., > 2000 chars = ~400 words)
         for key in detailed_summary:
-            if len(detailed_summary[key]) > 300:
-                detailed_summary[key] = detailed_summary[key][:300] + "..."
+            if len(detailed_summary[key]) > 2000:
+                detailed_summary[key] = detailed_summary[key][:2000] + "..."
         
         return detailed_summary
     

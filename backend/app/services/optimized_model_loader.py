@@ -58,7 +58,7 @@ class OptimizedModelEngine:
     async def get_lightweight_summarizer(self):
         """
         Get lightweight summarizer optimized for speed
-        Priority: DistilBART -> T5-small -> Extractive methods
+        Priority: PRIMERA -> DistilBART -> T5-small -> BART fallback
         """
         model_key = "lightweight_summarizer"
         
@@ -82,6 +82,7 @@ class OptimizedModelEngine:
             if AI_AVAILABLE:
                 # Try models in order of speed vs quality trade-off
                 model_options = [
+                    ("allenai/primera", "PRIMERA (scientific papers)"),
                     ("sshleifer/distilbart-cnn-12-6", "DistilBART (fast)"),
                     ("t5-small", "T5-Small (very fast)"),
                     ("facebook/bart-large-cnn", "BART-Large (fallback)")
@@ -126,7 +127,8 @@ class OptimizedModelEngine:
     
     async def get_full_summarizer(self):
         """
-        Get full-quality summarizer (original BART model)
+        Get full-quality summarizer for research papers.
+        Priority: PRIMERA-Large -> PRIMERA-Base -> BART-Large fallback
         """
         model_key = "full_summarizer"
         
@@ -151,32 +153,49 @@ class OptimizedModelEngine:
             
             device, device_type = self._get_device_info()
             
-            summarizer = pipeline(
-                "summarization",
-                model="facebook/bart-large-cnn",
-                device=device,
-                model_kwargs={"torch_dtype": torch.float16} if device_type == "cuda" else {}
-            )
-            
-            load_time = time.time() - start_time
-            logger.info(f"[SUCCESS] Loaded BART-Large-CNN in {load_time:.1f}s")
-            
-            self._models[model_key] = summarizer
-            self._model_stats[model_key] = {
-                "model": "facebook/bart-large-cnn",
-                "load_time": load_time,
-                "device": device_type,
-                "usage_count": 0
-            }
-            
-            return summarizer
+            model_options = [
+                ("allenai/primera", "PRIMERA (best quality for scientific papers)"),
+                ("sshleifer/distilbart-cnn-12-6", "DistilBART (balanced quality/speed)"),
+                ("facebook/bart-large-cnn", "BART-Large-CNN (fallback)")
+            ]
+
+            for model_name, description in model_options:
+                try:
+                    logger.info(f"[ATTEMPTING] Attempting to load {description}...")
+
+                    summarizer = pipeline(
+                        "summarization",
+                        model=model_name,
+                        device=device,
+                        model_kwargs={"torch_dtype": torch.float16} if device_type == "cuda" else {}
+                    )
+
+                    load_time = time.time() - start_time
+                    logger.info(f"[SUCCESS] Loaded {description} in {load_time:.1f}s")
+
+                    self._models[model_key] = summarizer
+                    self._model_stats[model_key] = {
+                        "model": model_name,
+                        "load_time": load_time,
+                        "device": device_type,
+                        "usage_count": 0
+                    }
+
+                    return summarizer
+
+                except Exception as e:
+                    logger.warning(f"Failed to load {description}: {e}")
+                    continue
+
+            logger.error("Failed to load any full-quality summarization model")
+            return None
             
         finally:
             del self._loading_locks[model_key]
     
     async def get_longformer_summarizer(self):
         """
-        Get Longformer model for long-document understanding (4096 tokens)
+        Get long-context summarizer for long-document understanding.
         Ideal for research papers with long methodology, results sections
         """
         model_key = "longformer_summarizer"
@@ -193,7 +212,7 @@ class OptimizedModelEngine:
         self._loading_locks[model_key] = True
         
         try:
-            logger.info("[LOADING] Loading Longformer for long-document analysis...")
+            logger.info("[LOADING] Loading long-context summarizer for long-document analysis...")
             start_time = time.time()
             
             if not AI_AVAILABLE:
@@ -237,7 +256,7 @@ class OptimizedModelEngine:
                     logger.warning(f"Failed to load {description}: {e}")
                     continue
             
-            logger.warning("Failed to load Longformer, will use BART for long documents")
+            logger.warning("Failed to load long-context model, will use full summarizer for long documents")
             return None
             
         finally:
@@ -286,11 +305,11 @@ class OptimizedModelEngine:
         async def _preload():
             logger.info("[STARTING] Starting background model preloading...")
             try:
-                # Load lightweight model only (DistilBART)
-                # BART-Large-CNN and Longformer skipped due to high memory requirements
+                # Load lightweight model only.
+                # Full and long-context models are available on-demand to save memory.
                 await self.get_lightweight_summarizer()
                 
-                logger.info("[INFO] BART-Large-CNN and Longformer available on-demand (not preloaded to save memory)")
+                logger.info("[INFO] Full and long-context summarizers available on-demand (not preloaded to save memory)")
                 logger.info("[SUCCESS] Background model preloading completed")
             except Exception as e:
                 logger.error(f"[ERROR] Background model preloading failed: {e}")
@@ -329,7 +348,7 @@ class OptimizedModelEngine:
             else:
                 # Rough estimation for CPU
                 model_count = len(self._models)
-                estimated_mb = model_count * 500  # ~500MB per BART model
+                estimated_mb = model_count * 500  # ~500MB per loaded summarizer model
                 return f"~{estimated_mb} MB (CPU)"
         except:
             return "Unknown"

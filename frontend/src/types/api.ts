@@ -27,6 +27,25 @@ export interface PaperMetadata {
   processing_method: string;
 }
 
+export interface Figure {
+  url?: string;
+  caption?: string;
+  description?: string;
+  page?: number;
+  width?: number;
+  height?: number;
+}
+
+export interface TOCSection {
+  title: string;
+  level: number;
+  number?: string;
+  content: string;
+  summary?: string;
+  page?: number;
+  children?: TOCSection[];
+}
+
 export interface AnalysisResult {
   metadata: PaperMetadata;
   quick_summary?: string;
@@ -38,8 +57,12 @@ export interface AnalysisResult {
     limitations: string;
     future_work: string;
     ai_insights: string[];
+    html_summary?: string;
+    figures?: Figure[];
+    glossary?: Record<string, string>;
   };
   original_abstract?: string;
+  table_of_contents?: TOCSection[];
 }
 
 export interface JobResponse {

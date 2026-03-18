@@ -26,8 +26,9 @@ src_path = os.path.join(project_root, "src")
 if src_path not in sys.path:
     sys.path.append(src_path)
 
-from app.data_models.schemas import AnalysisResult, PaperMetadata
+from app.data_models.schemas import AnalysisResult, PaperMetadata, TOCSection
 from app.services.optimized_model_loader import optimized_model_engine
+from app.services.toc_extraction_service import toc_service
 from scripts.parse_pdf_optimized import parse_pdf_with_grobid_optimized as parse_pdf_with_grobid
 
 logger = logging.getLogger(__name__)
@@ -134,10 +135,30 @@ class EnhancedAnalysisService:
             # Extract figures and captions (only if we have file_path)
             figures_data = []
             if file_path:
+                logger.info("[FIGURES] Starting figure extraction...")
                 figures_data = await self._extract_figures_with_captions(file_path, paper_data)
+                logger.info(f"[FIGURES] Extracted {len(figures_data)} figures from paper")
             
             # Build technical glossary
             glossary = await self._build_technical_glossary(paper_data)
+            
+            # Generate hierarchical TOC with section-level summaries (optional, adds ~60-120s)
+            # Disable via environment: ENABLE_TOC_GENERATION=false
+            toc = []
+            enable_toc = os.environ.get("ENABLE_TOC_GENERATION", "true").lower() != "false"
+            
+            if enable_toc:
+                try:
+                    logger.info("[TOC] Generating hierarchical table of contents...")
+                    # Don't specify max_workers - use default of 8 for faster processing
+                    toc = await self.generate_section_summaries_with_toc(paper_data)
+                    logger.info(f"[TOC] Successfully generated TOC with {len(self._flatten_toc_for_count(toc))} sections")
+                except asyncio.TimeoutError:
+                    logger.error("[TOC] TOC generation timed out (600s), skipping TOC")
+                except Exception as e:
+                    logger.warning(f"[TOC] Failed to generate hierarchical TOC: {e}, continuing without it")
+            else:
+                logger.info("[TOC] TOC generation disabled (ENABLE_TOC_GENERATION=false)")
             
             # Generate structured summaries
             executive_summary = await self._generate_executive_summary(paper_data)
@@ -178,7 +199,8 @@ class EnhancedAnalysisService:
                 quick_summary=quick_summary,
                 detailed_summary=detailed_summary,
                 comprehensive_analysis=comprehensive_analysis,
-                original_abstract=paper_data.get("abstract", "")
+                original_abstract=paper_data.get("abstract", ""),
+                table_of_contents=toc if toc else None
             )
             
         except Exception as e:
@@ -279,37 +301,51 @@ class EnhancedAnalysisService:
         """Extract figures with captions and metadata"""
         
         if not fitz:
-            logger.warning("PyMuPDF not available, skipping figure extraction")
+            logger.warning("[FIGURES] PyMuPDF not available, skipping figure extraction")
             return []
             
         try:
+            logger.info("[FIGURES] Opening PDF for figure extraction...")
             doc = fitz.open(file_path)
             figures = []
+            total_images_found = 0
             
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 
                 # Extract images
                 image_list = page.get_images(full=True)
+                logger.info(f"[FIGURES] Page {page_num + 1}: Found {len(image_list)} images")
+                total_images_found += len(image_list)
                 
                 for img_index, img in enumerate(image_list):
-                    # Extract image
-                    xref = img[0]
-                    pix = fitz.Pixmap(doc, xref)
-                    
-                    # Skip small images (likely logos or decorative)
-                    if pix.width < 100 or pix.height < 100:
-                        continue
-                    
-                    # Save image temporarily
-                    img_filename = f"figure_{page_num}_{img_index}.png"
-                    # Save to static figures directory
-                    figures_dir = os.path.join(os.path.dirname(__file__), "../../data/figures")
-                    os.makedirs(figures_dir, exist_ok=True)
-                    img_path = os.path.join(figures_dir, img_filename)
-                    
-                    if pix.n - pix.alpha < 4:  # GRAY or RGB
+                    try:
+                        # Extract image
+                        xref = img[0]
+                        pix = fitz.Pixmap(doc, xref)
+                        
+                        logger.debug(f"[FIGURES] Image {img_index} on page {page_num + 1}: {pix.width}x{pix.height}, format: CMYK" if pix.n == 4 and pix.alpha == 0 else f"[FIGURES] Image {img_index}: {pix.width}x{pix.height}")
+                        
+                        # Skip very small images (likely logos or decorative)
+                        if pix.width < 80 or pix.height < 80:
+                            logger.debug(f"[FIGURES] Skipping small image on page {page_num + 1} ({pix.width}x{pix.height})")
+                            pix = None
+                            continue
+                        
+                        # Convert CMYK to RGB if necessary
+                        if pix.n == 4 and pix.alpha == 0:
+                            # CMYK image - convert to RGB
+                            pix = fitz.Pixmap(fitz.csRGB, pix)
+                            logger.debug(f"[FIGURES] Converted CMYK to RGB for page {page_num + 1}")
+                        
+                        # Save image
+                        img_filename = f"figure_{page_num}_{img_index}.png"
+                        figures_dir = os.path.join(os.path.dirname(__file__), "../../data/figures")
+                        os.makedirs(figures_dir, exist_ok=True)
+                        img_path = os.path.join(figures_dir, img_filename)
+                        
                         pix.save(img_path)
+                        logger.info(f"[FIGURES] ✓ Saved figure: {img_filename} ({pix.width}x{pix.height}) on Page {page_num + 1}")
                         
                         # Try to find associated caption
                         caption = self._find_figure_caption(page, paper_data)
@@ -319,19 +355,24 @@ class EnhancedAnalysisService:
                             "path": img_path,
                             "url": f"/static/figures/{img_filename}",
                             "page": page_num + 1,
-                            "caption": caption,
+                            "caption": caption if caption else f"Figure from page {page_num + 1}",
                             "width": pix.width,
                             "height": pix.height,
                             "description": self._generate_figure_description(caption)
                         })
-                    
-                    pix = None
+                        
+                        pix = None
+                        
+                    except Exception as img_error:
+                        logger.warning(f"[FIGURES] Failed to extract image {img_index} on page {page_num + 1}: {img_error}")
+                        continue
             
             doc.close()
-            return figures[:10]  # Limit to 10 figures max
+            logger.info(f"[FIGURES] ✓ Figure extraction complete: {len(figures)}/{total_images_found} figures extracted (filtered {total_images_found - len(figures)} small/invalid)")
+            return figures[:20]  # Limit to 20 figures max
             
         except Exception as e:
-            logger.warning(f"Figure extraction failed: {e}")
+            logger.error(f"[FIGURES] Figure extraction failed: {e}", exc_info=True)
             return []
     
     def _find_figure_caption(self, page, paper_data: Dict[str, Any]) -> str:
@@ -542,7 +583,7 @@ class EnhancedAnalysisService:
                 sentences = [s.strip() for s in clean_abstract.split('.') if s.strip() and len(s.strip()) > 25]
                 
                 if len(sentences) >= 3:
-                    summary = '. '.join(sentences[:4])
+                    summary = '. '.join(sentences[:10])
                     summary = self._fix_grammar_issues(summary)
                     summary = self._remove_redundant_sentences(summary)
                     if not summary.endswith('.'):
@@ -1217,6 +1258,141 @@ class EnhancedAnalysisService:
     def _store_paper_data(self, job_id: str, paper_data: Dict):
         """Store paper data for chat indexing"""
         self.paper_cache[job_id] = paper_data
+    
+    async def generate_section_summaries_with_toc(
+        self, 
+        paper_data: Dict[str, Any],
+        max_workers: int = 4
+    ) -> List[TOCSection]:
+        """
+        Generate hierarchical table of contents with section-level summaries
+        
+        Args:
+            paper_data: Extracted paper data from GROBID
+            max_workers: Number of parallel workers for summarization
+            
+        Returns:
+            Hierarchical list of TOCSection objects with summaries
+        """
+        try:
+            logger.info(f"[TOC] Starting hierarchical TOC generation with {max_workers} parallel workers")
+            
+            # Extract TOC structure from sections
+            sections = paper_data.get("sections", {})
+            abstract = paper_data.get("abstract", "")
+            
+            toc = await toc_service.extract_toc_structure(sections, abstract)
+            logger.info(f"[TOC] Extracted {len(toc)} top-level sections")
+            
+            # Define section-level summarization function
+            async def summarize_section(title: str, content: str) -> str:
+                """Summarize a single section using PRIMERA model"""
+                try:
+                    if len(content) < 100:
+                        return content  # Too short to summarize
+                    
+                    # Use PRIMERA for section summarization
+                    summarizer = await self.model_engine.get_lightweight_summarizer()
+                    
+                    if not summarizer:
+                        logger.warning(f"[SUMMARY] Model unavailable for '{title}', using extractive")
+                        return self._extract_first_sentences(content, 8)
+                    
+                    # Clean content
+                    clean_content = re.sub(r'\([^)]*\)', '', content)  # Remove citations
+                    clean_content = re.sub(r'\s+', ' ', clean_content).strip()
+                    
+                    # Truncate to max valid length for model
+                    max_input_length = 1024  # PRIMERA context limit
+                    if len(clean_content) > max_input_length:
+                        clean_content = clean_content[:max_input_length]
+                    
+                    if len(clean_content) < 100:
+                        return content
+                    
+                    try:
+                        # Generate summary
+                        result = summarizer(
+                            clean_content,
+                            max_length=min(500, len(clean_content) // 2),
+                            min_length=80,
+                            do_sample=False,
+                            truncation=True,
+                            num_beams=2
+                        )
+                        
+                        summary = result[0]['summary_text']
+                        logger.debug(f"[SUMMARY] '{title[:40]}...': {len(content)} → {len(summary)} chars")
+                        return summary
+                        
+                    except Exception as e:
+                        logger.warning(f"[SUMMARY] Model inference failed for '{title}': {e}")
+                        return self._extract_first_sentences(content, 8)
+                        
+                except Exception as e:
+                    logger.error(f"[ERROR] Summarization error for '{title}': {e}")
+                    return content[:800] + "..." if len(content) > 800 else content
+            
+            # Generate all section summaries in parallel
+            toc_with_summaries = await toc_service.generate_section_summaries(
+                toc,
+                summarize_section,
+                max_workers=max_workers
+            )
+            
+            logger.info("[TOC] Completed hierarchical TOC generation with summaries")
+            
+            # Convert dataclass TOCSections to Pydantic TOCSections for validation
+            pydantic_toc = self._convert_toc_to_pydantic(toc_with_summaries)
+            return pydantic_toc
+            
+        except Exception as e:
+            logger.error(f"[ERROR] TOC generation failed: {e}")
+            raise
+    
+    def _convert_toc_to_pydantic(self, toc_sections: List[Any]) -> List[TOCSection]:
+        """
+        Convert dataclass TOCSection objects to Pydantic TOCSection models
+        Recursively handles nested children
+        """
+        result = []
+        for section in toc_sections:
+            # Convert children recursively
+            pydantic_children = []
+            if hasattr(section, 'children') and section.children:
+                pydantic_children = self._convert_toc_to_pydantic(section.children)
+            
+            # Create Pydantic model from dataclass attributes
+            pydantic_section = TOCSection(
+                title=section.title,
+                level=section.level,
+                number=section.number,
+                content=section.content,
+                summary=section.summary,
+                page=section.page,
+                children=pydantic_children
+            )
+            result.append(pydantic_section)
+        
+        return result
+    
+    def _extract_first_sentences(self, text: str, num_sentences: int = 3) -> str:
+        """Extract first N sentences from text as fallback summarization"""
+        sentences = [s.strip() for s in text.split('.') if s.strip() and len(s.strip()) > 20]
+        return '. '.join(sentences[:num_sentences]) + '.' if sentences else text[:300]
+    
+    def _flatten_toc_for_count(self, toc: List[TOCSection]) -> List[TOCSection]:
+        """Flatten TOC for counting total sections"""
+        flat = []
+        def traverse(sections: List[TOCSection]):
+            for section in sections:
+                flat.append(section)
+                if section.children:
+                    traverse(section.children)
+        traverse(toc)
+        return flat
 
 # Create global instance
+
+
 enhanced_analysis_service = EnhancedAnalysisService()

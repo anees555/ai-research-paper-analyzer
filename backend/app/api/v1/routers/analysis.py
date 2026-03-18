@@ -17,12 +17,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 class ProcessingMode(str, Enum):
-    FAST = "fast"          # 30-60 seconds, basic analysis
-    BALANCED = "balanced"  # 60-120 seconds, AI-powered but optimized
-    COMPREHENSIVE = "comprehensive"  # 120-300 seconds, full analysis
-    ENHANCED = "enhanced"  # Professional structured analysis with figures
+    FAST = "fast"          # 30-60 seconds, abstract + 3-paragraph summary  
+    ENHANCED = "enhanced"  # 120-300 seconds, professional structured analysis with figures
 
-async def process_analysis_task(job_id: str, file_path: str, mode: str = "balanced"):
+
+async def process_analysis_task(job_id: str, file_path: str, mode: str = "fast"):
     """
     Background task to run analysis
     """
@@ -32,13 +31,13 @@ async def process_analysis_task(job_id: str, file_path: str, mode: str = "balanc
         job_queue.update_job(db, job_id, JobStatus.PROCESSING)
         
         # Run analysis with selected mode
-        if mode in ["fast", "balanced"]:
-            result = await fast_analysis_service.analyze_paper_fast(file_path, job_id, mode)
+        if mode == "fast":
+            result = await fast_analysis_service.analyze_paper_fast(file_path, job_id, mode="fast")
         elif mode == "enhanced":
-            result = await enhanced_analysis_service.analyze_paper_enhanced(file_path, job_id, mode)
+            result = await enhanced_analysis_service.analyze_paper_enhanced(file_path, job_id, mode="enhanced")
         else:
-            # Use original service for comprehensive mode  
-            result = await analysis_service.analyze_paper(file_path, job_id)
+            # Default to fast mode
+            result = await fast_analysis_service.analyze_paper_fast(file_path, job_id, mode="fast")
         
         # Update status to completed
         job_queue.update_job(db, job_id, JobStatus.COMPLETED, result=result)
@@ -46,18 +45,29 @@ async def process_analysis_task(job_id: str, file_path: str, mode: str = "balanc
         # Try to index for chat (non-blocking)
         try:
             from app.services.chat_service import chat_service
-            # Get the stored paper data from analysis service
-            paper_data = analysis_service.get_paper_data(job_id)
-            if paper_data:
+            
+            # Build paper data from result instead of cache
+            # This ensures it works regardless of which analysis service was used
+            if result and hasattr(result, 'metadata') and result.metadata:
+                paper_data = {
+                    "title": result.metadata.title if hasattr(result.metadata, 'title') else 'Unknown',
+                    "abstract": result.original_abstract if hasattr(result, 'original_abstract') else '',
+                    "sections": result.detailed_summary if hasattr(result, 'detailed_summary') else {}
+                }
+                
+                logger.info(f"Indexing paper {job_id} for chat with {len(paper_data.get('sections', {}))} sections")
                 success = chat_service.index_paper_for_chat(job_id, paper_data)
+                
                 if success:
                     logger.info(f"Paper {job_id} indexed for chat successfully")
                 else:
                     logger.warning(f"Failed to index paper {job_id} for chat")
             else:
-                logger.warning(f"No paper data found for job {job_id} to index for chat")
+                logger.warning(f"No valid result data for job {job_id} to index for chat")
         except Exception as e:
+            import traceback
             logger.error(f"Chat indexing failed for {job_id}: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             # Don't fail the entire analysis just because chat indexing failed
         
     except Exception as e:
@@ -69,7 +79,7 @@ async def process_analysis_task(job_id: str, file_path: str, mode: str = "balanc
 async def upload_paper(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    mode: ProcessingMode = Query(ProcessingMode.BALANCED, description="Processing mode: fast (~60s), balanced (~120s), comprehensive (~300s)"),
+    mode: ProcessingMode = Query(ProcessingMode.FAST, description="Processing mode: fast (~60s, 3-paragraph summary) or enhanced (~300s, professional analysis)"),
     db: Session = Depends(get_db),
     # current_user = Depends(deps.get_current_user)  # Temporarily disabled for testing
 ):
@@ -77,9 +87,8 @@ async def upload_paper(
     Upload a PDF paper and start background analysis with configurable processing mode.
     
     Processing Modes:
-    - **fast**: 30-60 seconds, extractive summaries, basic metadata
-    - **balanced**: 60-120 seconds, lightweight AI models, good quality/speed trade-off
-    - **comprehensive**: 120-300 seconds, full AI analysis, highest quality
+    - **fast**: 30-60 seconds, original abstract + 3-paragraph summary covering problem, solution, technology, and conclusion
+    - **enhanced**: 120-300 seconds, professional structured analysis with figures, glossary, hierarchical TOC, and section summaries
     """
     try:
         # 1. Save file
@@ -178,47 +187,51 @@ async def analyze_paper_instant(
 @router.get("/modes", summary="Get available processing modes")
 async def get_processing_modes():
     """
-    Get information about available processing modes and their characteristics.
+    Get information about available processing modes.
+    
+    Two modes available:
+    - fast: Quick 3-paragraph summary (abstract + problem + solution + conclusion)
+    - enhanced: Professional structured analysis with figures and glossary
     """
     return {
         "modes": {
             "fast": {
-                "name": "Fast Processing",
+                "name": "Fast Mode",
                 "estimated_time": "30-60 seconds",
-                "description": "Extractive summaries, basic metadata, rule-based analysis",
-                "features": ["Quick summary", "Basic section analysis", "Metadata extraction"],
+                "description": "Original abstract + 3-paragraph summary in simple language covering: problem statement, technology/solution, implementation & conclusion",
+                "features": [
+                    "Original abstract",
+                    "3-paragraph summary (~50 lines)",
+                    "Problem statement",
+                    "Technology and solution",
+                    "Implementation details",
+                    "Conclusions"
+                ],
                 "ai_models": False,
-                "recommended_for": "Quick overview, large batches"
-            },
-            "balanced": {
-                "name": "Balanced Processing", 
-                "estimated_time": "60-120 seconds",
-                "description": "Lightweight AI models, good quality/speed trade-off",
-                "features": ["AI summaries", "Section analysis", "Key insights", "Concurrent processing"],
-                "ai_models": "DistilBART or T5-small",
-                "recommended_for": "Most use cases, daily workflow"
-            },
-            "comprehensive": {
-                "name": "Comprehensive Analysis",
-                "estimated_time": "120-300 seconds", 
-                "description": "Full AI analysis with BART-Large, detailed insights",
-                "features": ["Full AI analysis", "Detailed summaries", "Deep insights", "Research quality"],
-                "ai_models": "BART-Large-CNN",
-                "recommended_for": "Research papers, detailed analysis"
+                "recommended_for": "Quick overview, fast processing"
             },
             "enhanced": {
-                "name": "Enhanced Professional Analysis",
-                "estimated_time": "90-150 seconds",
-                "description": "Professional structured summaries with figures and glossary",
-                "features": ["HTML templates", "Figure extraction", "Technical glossary", "Clean output"],
-                "ai_models": "BART + Custom processing",
-                "recommended_for": "Professional reports, presentations"
+                "name": "Enhanced Professional Mode",
+                "estimated_time": "120-300 seconds",
+                "description": "Comprehensive professional analysis with hierarchical table of contents, section summaries, figure extraction, and technical glossary",
+                "features": [
+                    "Executive summary",
+                    "Research analysis breakdown",
+                    "Technical details",
+                    "Figure extraction with captions",
+                    "Technical glossary (20+ concepts)",
+                    "Hierarchical table of contents",
+                    "Section-level summaries",
+                    "Professional HTML output"
+                ],
+                "ai_models": "PRIMERA (scientific papers)",
+                "recommended_for": "Professional reports, detailed analysis, presentations"
             }
         },
-        "default_mode": "enhanced",
-        "instant_analysis_supported": ["fast", "balanced", "enhanced"],
-        "background_processing_required": ["comprehensive"]
+        "default_mode": "fast",
+        "supported_modes": ["fast", "enhanced"]
     }
+
 
 @router.post("/enhanced", response_model=JobResponse)
 async def upload_and_analyze_enhanced(
