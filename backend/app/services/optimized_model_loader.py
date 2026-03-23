@@ -80,44 +80,30 @@ class OptimizedModelEngine:
             device, device_type = self._get_device_info()
             
             if AI_AVAILABLE:
-                # Try models in order of speed vs quality trade-off
-                model_options = [
-                    ("allenai/primera", "PRIMERA (scientific papers)"),
-                    ("sshleifer/distilbart-cnn-12-6", "DistilBART (fast)"),
-                    ("t5-small", "T5-Small (very fast)"),
-                    ("facebook/bart-large-cnn", "BART-Large (fallback)")
-                ]
-                
-                for model_name, description in model_options:
-                    try:
-                        logger.info(f"[ATTEMPTING] Attempting to load {description}...")
-                        
-                        summarizer = pipeline(
-                            "summarization",
-                            model=model_name,
-                            device=device,
-                            model_kwargs={"torch_dtype": torch.float16} if device_type == "cuda" else {}
-                        )
-                        
-                        load_time = time.time() - start_time
-                        logger.info(f"[SUCCESS] Loaded {description} in {load_time:.1f}s")
-                        
-                        self._models[model_key] = summarizer
-                        self._model_stats[model_key] = {
-                            "model": model_name,
-                            "load_time": load_time,
-                            "device": device_type,
-                            "usage_count": 0
-                        }
-                        
-                        return summarizer
-                        
-                    except Exception as e:
-                        logger.warning(f"Failed to load {description}: {e}")
-                        continue
-                
-                logger.error("Failed to load any lightweight summarization model")
-                return None
+                # Use DistilBART for fast mode for more natural summaries
+                model_name = "sshleifer/distilbart-cnn-12-6"
+                description = "DistilBART (fast, natural summaries for fast mode)"
+                try:
+                    logger.info(f"[ATTEMPTING] Attempting to load {description}...")
+                    summarizer = pipeline(
+                        "summarization",
+                        model=model_name,
+                        device=device,
+                        model_kwargs={"torch_dtype": torch.float16} if device_type == "cuda" else {}
+                    )
+                    load_time = time.time() - start_time
+                    logger.info(f"[SUCCESS] Loaded {description} in {load_time:.1f}s")
+                    self._models[model_key] = summarizer
+                    self._model_stats[model_key] = {
+                        "model": model_name,
+                        "load_time": load_time,
+                        "device": device_type,
+                        "usage_count": 0
+                    }
+                    return summarizer
+                except Exception as e:
+                    logger.error(f"Failed to load DistilBART: {e}")
+                    return None
             else:
                 logger.info("[CONFIG] AI not available - using rule-based processing")
                 return None

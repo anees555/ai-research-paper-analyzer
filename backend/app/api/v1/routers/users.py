@@ -42,6 +42,7 @@ def read_user_history(
 ):
     """
     Retrieve user job history.
+    Note: If you add DB writes here in the future, use safe_db_commit from app.core.database for robust error handling.
     """
     jobs = db.query(Job).filter(Job.user_id == current_user.id).offset(skip).limit(limit).all()
     return jobs

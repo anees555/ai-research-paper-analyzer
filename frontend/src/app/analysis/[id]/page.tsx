@@ -1,6 +1,7 @@
 "use client";
 
 import { useAnalysis } from "@/hooks/use-analysis";
+import { useEffect, useState } from "react";
 import { Loader2, AlertCircle, CheckCircle, FileText } from "lucide-react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -12,7 +13,82 @@ import { TOCDisplay } from "@/components/analysis/toc-display";
 export default function AnalysisPage() {
   const params = useParams();
   const jobId = params.id as string;
-  const { data: job, isLoading, error } = useAnalysis(jobId);
+  const [instantResult, setInstantResult] = useState<any | null>(null);
+  const isInstant = jobId && jobId.startsWith("instant-");
+  const { data: job, isLoading, error } = useAnalysis(isInstant ? "" : jobId);
+
+  useEffect(() => {
+    if (isInstant) {
+      const stored = localStorage.getItem(`instant_result_${jobId}`);
+      if (stored) {
+        setInstantResult(JSON.parse(stored));
+      }
+    }
+  }, [isInstant, jobId]);
+
+  if (isInstant && instantResult) {
+    // Render instant result using the same UI as enhanced mode
+    const result = instantResult;
+    const hasTOC = result.table_of_contents && result.table_of_contents.length > 0;
+    return (
+      <div className="flex flex-col min-h-screen">
+        {hasTOC && result.table_of_contents ? (
+          <>
+            <TOCDisplay
+              toc={result.table_of_contents}
+              metadata={{
+                title: result.metadata?.title || "Summary",
+                authors: result.metadata?.authors || [],
+                sections: result.metadata?.num_sections,
+              }}
+              glossary={result.comprehensive_analysis?.glossary || {}}
+            />
+          </>
+        ) : (
+          <>
+            <AnalysisDisplay
+              title={result.metadata?.title || "Summary"}
+              abstract={result.original_abstract}
+              htmlContent={
+                result.comprehensive_analysis?.html_summary ||
+                `<h2>Summary</h2>${(result.quick_summary || result.original_abstract)
+                  .split(/\n\n+/)
+                  .map(p => `<p>${p.trim()}</p>`)
+                  .join('')}`
+              }
+              glossary={result.comprehensive_analysis?.glossary || {}}
+              figures={result.comprehensive_analysis?.figures?.map((fig: any) => ({
+                url: fig.url,
+                caption: fig.caption || fig.description || "Figure",
+                page: fig.page || 1,
+              })) || []}
+              metadata={{
+                authors: result.metadata?.authors || [],
+                num_sections: result.metadata?.num_sections,
+                processing_method: result.metadata?.processing_method,
+              }}
+            />
+            {/* Section summaries, if present */}
+            {result.detailed_summary && Object.keys(result.detailed_summary).length > 0 && (
+              <div className="max-w-4xl mx-auto p-8">
+                <h2 className="text-2xl font-bold mb-4">Section Summaries</h2>
+                {Object.entries(result.detailed_summary).map(([section, summary]) => (
+                  <div key={section} className="mb-6">
+                    <h3 className="text-xl font-semibold mb-2">{section}</h3>
+                    <p className="leading-relaxed text-gray-700 dark:text-gray-300">{summary}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        {/* Disabled PaperChat for fast mode (no jobId) */}
+        <div className="max-w-4xl mx-auto pb-8">
+          <PaperChat jobId={null} paperTitle={result.metadata?.title || "Summary"} disabled reason="Chat is only available for enhanced mode analyses." />
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -128,7 +204,7 @@ export default function AnalysisPage() {
     <div className="flex flex-col min-h-screen">
       {hasTOC && result.table_of_contents ? (
         // Display hierarchical TOC with dual content panels
-        <div className="flex-1 container mx-auto px-6 py-8">
+        <>
           <TOCDisplay 
             toc={result.table_of_contents}
             metadata={{
@@ -136,29 +212,44 @@ export default function AnalysisPage() {
               authors: result.metadata.authors,
               sections: result.metadata.num_sections,
             }}
+            glossary={result.comprehensive_analysis?.glossary || {}}
           />
-        </div>
+        </>
       ) : (
         // Fallback to traditional analysis display
-        <AnalysisDisplay
-          title={result.metadata.title}
-          abstract={result.original_abstract}
-          htmlContent={
-            result.comprehensive_analysis?.html_summary || 
-            `<h2>Summary</h2><p>${result.quick_summary || result.original_abstract}</p>`
-          }
-          glossary={result.comprehensive_analysis?.glossary || {}}
-          figures={result.comprehensive_analysis?.figures?.map((fig: any) => ({
-            url: `http://localhost:8003${fig.url}`,
-            caption: fig.caption || fig.description || "Figure",
-            page: fig.page || 1,
-          })) || []}
-          metadata={{
-            authors: result.metadata.authors,
-            num_sections: result.metadata.num_sections,
-            processing_method: result.metadata.processing_method,
-          }}
-        />
+        <>
+          <AnalysisDisplay
+            title={result.metadata.title}
+            abstract={result.original_abstract}
+            htmlContent={
+              result.comprehensive_analysis?.html_summary || 
+              `<h2>Summary</h2><p>${result.quick_summary || result.original_abstract}</p>`
+            }
+            glossary={result.comprehensive_analysis?.glossary || {}}
+            figures={result.comprehensive_analysis?.figures?.map((fig: any) => ({
+              url: `http://localhost:8003${fig.url}`,
+              caption: fig.caption || fig.description || "Figure",
+              page: fig.page || 1,
+            })) || []}
+            metadata={{
+              authors: result.metadata.authors,
+              num_sections: result.metadata.num_sections,
+              processing_method: result.metadata.processing_method,
+            }}
+          />
+          {/* PATCH: Show all section summaries below main display */}
+          {result.detailed_summary && Object.keys(result.detailed_summary).length > 0 && (
+            <div className="max-w-4xl mx-auto p-8">
+              <h2 className="text-2xl font-bold mb-4">Section Summaries</h2>
+              {Object.entries(result.detailed_summary).map(([section, summary]) => (
+                <div key={section} className="mb-6">
+                  <h3 className="text-xl font-semibold mb-2">{section}</h3>
+                  <p className="leading-relaxed text-gray-700 dark:text-gray-300">{summary}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
       <PaperChat jobId={jobId} paperTitle={result.metadata.title} />
     </div>

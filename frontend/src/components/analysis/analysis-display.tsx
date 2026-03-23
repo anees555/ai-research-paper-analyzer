@@ -99,6 +99,31 @@ export function AnalysisDisplay({
     return doc.documentElement.innerHTML;
   };
 
+  // --- PATCH: Show all section summaries if available ---
+  // Accept detailed_summary as a prop (add to props if not present)
+  // For now, try to get it from metadata (legacy) or window (hacky fallback)
+  let detailedSummary: Record<string, string> | undefined = undefined;
+  if (typeof window !== "undefined" && (window as any).detailed_summary) {
+    detailedSummary = (window as any).detailed_summary;
+  }
+  // If you add detailed_summary to props, use that instead
+
+  // Render all section summaries if present
+  const renderSectionSummaries = () => {
+    if (!detailedSummary || Object.keys(detailedSummary).length === 0) return null;
+    return (
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold mb-4">Section Summaries</h2>
+        {Object.entries(detailedSummary).map(([section, summary]) => (
+          <div key={section} className="mb-6">
+            <h3 className="text-xl font-semibold mb-2">{section}</h3>
+            <p className="leading-relaxed text-gray-700 dark:text-gray-300">{summary}</p>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const handleCopyCode = (text: string) => {
     navigator.clipboard.writeText(text);
   };

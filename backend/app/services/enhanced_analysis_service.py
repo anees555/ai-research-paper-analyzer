@@ -1314,8 +1314,8 @@ class EnhancedAnalysisService:
                         # Generate summary
                         result = summarizer(
                             clean_content,
-                            max_length=min(500, len(clean_content) // 2),
-                            min_length=80,
+                            max_length=450,
+                            min_length=100,
                             do_sample=False,
                             truncation=True,
                             num_beams=2

@@ -16,8 +16,10 @@ import { ChatMessage, ChatResponse, ChatSource } from "@/types/api";
 import { cn } from "@/lib/utils";
 
 interface PaperChatProps {
-  jobId: string;
+  jobId: string | null;
   paperTitle: string;
+  disabled?: boolean;
+  reason?: string;
 }
 
 interface DisplayMessage {
@@ -28,7 +30,7 @@ interface DisplayMessage {
   timestamp: Date;
 }
 
-export function PaperChat({ jobId, paperTitle }: PaperChatProps) {
+export function PaperChat({ jobId, paperTitle, disabled = false, reason }: PaperChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
@@ -43,6 +45,19 @@ export function PaperChat({ jobId, paperTitle }: PaperChatProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // If disabled, do not initialize chat or open panel
+  if (disabled) {
+    return (
+      <div className="w-full flex flex-col items-center justify-center p-8 bg-gray-50 rounded-2xl border mt-8">
+        <AlertCircle className="w-8 h-8 mb-2 text-blue-500" />
+        <h3 className="text-lg font-semibold mb-1">Chat Unavailable</h3>
+        <p className="text-gray-500 text-center max-w-xs">
+          {reason || "Chat is disabled for this analysis mode."}
+        </p>
+      </div>
+    );
+  }
 
   // Check/initialize chat when opened
   useEffect(() => {
@@ -59,6 +74,7 @@ export function PaperChat({ jobId, paperTitle }: PaperChatProps) {
   }, [isOpen, isReady]);
 
   const initializeChat = async () => {
+    if (!jobId) return;
     setIsIndexing(true);
     setError(null);
 
@@ -96,7 +112,7 @@ export function PaperChat({ jobId, paperTitle }: PaperChatProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !jobId) return;
 
     const userMessage: DisplayMessage = {
       role: "user",

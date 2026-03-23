@@ -29,35 +29,28 @@ async def process_analysis_task(job_id: str, file_path: str, mode: str = "fast")
     try:
         # Update status to processing
         job_queue.update_job(db, job_id, JobStatus.PROCESSING)
-        
-        # Run analysis with selected mode
-        if mode == "fast":
-            result = await fast_analysis_service.analyze_paper_fast(file_path, job_id, mode="fast")
-        elif mode == "enhanced":
-            result = await enhanced_analysis_service.analyze_paper_enhanced(file_path, job_id, mode="enhanced")
-        else:
-            # Default to fast mode
-            result = await fast_analysis_service.analyze_paper_fast(file_path, job_id, mode="fast")
-        
+
+        # Use the new robust section-wise pipeline for all modes
+        result = await analysis_service.analyze_paper(file_path, job_id)
+
         # Update status to completed
         job_queue.update_job(db, job_id, JobStatus.COMPLETED, result=result)
-        
+
         # Try to index for chat (non-blocking)
         try:
             from app.services.chat_service import chat_service
-            
+
             # Build paper data from result instead of cache
-            # This ensures it works regardless of which analysis service was used
             if result and hasattr(result, 'metadata') and result.metadata:
                 paper_data = {
                     "title": result.metadata.title if hasattr(result.metadata, 'title') else 'Unknown',
                     "abstract": result.original_abstract if hasattr(result, 'original_abstract') else '',
                     "sections": result.detailed_summary if hasattr(result, 'detailed_summary') else {}
                 }
-                
+
                 logger.info(f"Indexing paper {job_id} for chat with {len(paper_data.get('sections', {}))} sections")
                 success = chat_service.index_paper_for_chat(job_id, paper_data)
-                
+
                 if success:
                     logger.info(f"Paper {job_id} indexed for chat successfully")
                 else:
@@ -69,7 +62,7 @@ async def process_analysis_task(job_id: str, file_path: str, mode: str = "fast")
             logger.error(f"Chat indexing failed for {job_id}: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             # Don't fail the entire analysis just because chat indexing failed
-        
+
     except Exception as e:
         job_queue.update_job(db, job_id, JobStatus.FAILED, error=str(e))
     finally:
@@ -143,40 +136,47 @@ async def analyze_paper_instant(
     - **balanced**: Returns in 60-120 seconds with lightweight AI analysis  
     - **comprehensive**: Use /upload endpoint for background processing
     """
-    if mode == ProcessingMode.COMPREHENSIVE:
+    if mode not in [ProcessingMode.FAST, ProcessingMode.ENHANCED]:
         raise HTTPException(
-            status_code=400, 
-            detail="Comprehensive mode requires background processing. Use /upload endpoint."
+            status_code=400,
+            detail="Only 'fast' and 'enhanced' modes are supported for instant analysis. Use /upload endpoint for other modes."
         )
     
     try:
         # 1. Save file temporarily
         file_path = await file_service.save_upload_file(file)
-        
+
         # 2. Generate unique job ID for tracking
         import uuid
         job_id = str(uuid.uuid4())
-        
+
         # 3. Perform instant analysis
-        result = await fast_analysis_service.analyze_paper_fast(file_path, job_id, mode.value)
-        
+        result = await fast_analysis_service.analyze_fast(file_path, job_id)
+
         # 4. Clean up temporary file
         import os
         try:
             os.remove(file_path)
         except:
             pass  # Ignore cleanup errors
-        
+
+        # Only return a brief, simple summary for fast mode
+        summary_text = result.quick_summary if hasattr(result, 'quick_summary') else None
+        metadata = result.metadata if hasattr(result, 'metadata') else None
+
         return {
             "status": "completed",
             "processing_mode": mode.value,
-            "analysis_result": result,
+            "analysis_result": {
+                "metadata": metadata,
+                "quick_summary": summary_text
+            },
             "processing_info": {
                 "instant_processing": True,
                 "estimated_time": "30-60s" if mode == ProcessingMode.FAST else "60-120s"
             }
         }
-        
+
     except HTTPException as e:
         raise e
     except Exception as e:

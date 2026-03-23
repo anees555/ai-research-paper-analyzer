@@ -1,6 +1,6 @@
 "use client";
 
-import { FileUpload } from "@/components/upload/file-upload";
+import FileUpload from "@/components/upload/file-upload";
 import { ConnectionStatus } from "@/components/status/connection-status";
 import { BookOpen, FileText, Clock } from "lucide-react";
 import { useEffect, useState } from "react";

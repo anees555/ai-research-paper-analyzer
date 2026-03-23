@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChatService:
+    from app.core.database import retry_db_operation
     """
     Service for handling Q&A chat about research papers.
     Uses semantic search + LLM for intelligent responses.
@@ -57,21 +58,22 @@ class ChatService:
         try:
             import sys
             import os
-            # Add the semantic search directory to Python path
-            semantic_search_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'semantic-document-search', 'src'))
+            # Always resolve semantic search path relative to project root
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
+            semantic_search_path = os.path.join(project_root, 'semantic-document-search', 'src')
             if semantic_search_path not in sys.path:
                 sys.path.insert(0, semantic_search_path)
-            
+
             logger.info(f"Adding semantic search path: {semantic_search_path}")
             logger.info(f"Path exists: {os.path.exists(semantic_search_path)}")
-            
+
             from integrated_pipeline import DocumentSearchPipeline
             from simple_qa_pipeline import SimpleQAPipeline
 
             logger.info("Initializing semantic search pipeline for chat...")
 
             self._pipeline = DocumentSearchPipeline(
-                persist_directory="./data/chroma_chat_db",
+                persist_directory=os.path.join(project_root, "backend", "data", "chroma_chat_db"),
                 collection_name="paper_chat",
                 use_grobid=False,  # We already have processed text
                 chunk_size=800,
@@ -83,11 +85,8 @@ class ChatService:
             # Try to initialize Groq LLM if API key is available
             try:
                 from groq_llm_interface import GroqLLMInterface
-                import os
-
-                # Check if API key is properly configured
                 groq_api_key = os.getenv('GROQ_API_KEY')
-                print(f"[DEBUG] Groq API key found: {bool(groq_api_key and groq_api_key != 'your_groq_api_key_here')}")  # Debug log
+                print(f"[DEBUG] Groq API key found: {bool(groq_api_key and groq_api_key != 'your_groq_api_key_here')}" )  # Debug log
                 if groq_api_key and groq_api_key != 'your_groq_api_key_here':
                     self._groq_llm = GroqLLMInterface()
                     logger.info("Groq LLM initialized for enhanced responses")
@@ -317,10 +316,11 @@ class ChatService:
                 )
 
             # Save to DB (non-blocking - don't fail if DB save fails)
+
+            from app.data_models.models import ChatHistory
+            import uuid
+            from app.core.database import safe_db_commit
             try:
-                from app.data_models.models import ChatHistory
-                import uuid
-                
                 # Save user message
                 user_msg = ChatHistory(
                     id=str(uuid.uuid4()),
@@ -331,7 +331,6 @@ class ChatService:
                     timestamp=datetime.utcnow()
                 )
                 db.add(user_msg)
-                
                 # Save AI response
                 ai_msg = ChatHistory(
                     id=str(uuid.uuid4()),
@@ -342,12 +341,11 @@ class ChatService:
                     timestamp=datetime.utcnow()
                 )
                 db.add(ai_msg)
-                db.commit()
+                safe_db_commit(db)
                 logger.info(f"Chat history saved for job {job_id}")
             except Exception as db_error:
                 logger.warning(f"Failed to save chat history to database: {db_error}")
                 # Don't fail the entire request if DB save fails
-                db.rollback()
 
             return ChatResponse(
                 message=answer,

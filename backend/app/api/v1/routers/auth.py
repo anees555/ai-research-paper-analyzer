@@ -25,6 +25,7 @@ class UserResponse(BaseModel):
 
 @router.post("/register", response_model=UserResponse)
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
+    from app.core.database import safe_db_commit
     user = db.query(User).filter(User.email == user_in.email).first()
     if user:
         raise HTTPException(
@@ -35,10 +36,14 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         email=user_in.email,
         hashed_password=security.get_password_hash(user_in.password),
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    try:
+        db.add(user)
+        safe_db_commit(db)
+        db.refresh(user)
+        return user
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to register user: {e}")
 
 @router.post("/login/access-token", response_model=Token)
 def login_access_token(

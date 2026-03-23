@@ -330,17 +330,19 @@ class TOCExtractionService:
             
             # Original content
             if section.content:
+                # Display full content
+                display_content = section.content[:3000] + ("..." if len(section.content) > 3000 else "")
                 parts.append(
                     f'{indent}  <div class="section-original">'
                     f'{indent}    <h5>Original Content</h5>'
-                    f'{indent}    <div class="original-text">{section.content[:500]}...</div>'
+                    f'{indent}    <div class="original-text">{display_content}</div>'
                     f'{indent}  </div>'
                 )
             
             # AI Summary
             if include_summaries and section.summary:
-                # Limit to reasonable display size (1500 chars = ~300 words)
-                display_text = section.summary[:1500] + ("..." if len(section.summary) > 1500 else "")
+                # Display full summary (limit to ~2000 chars for display = ~400 words)
+                display_text = section.summary[:2000] + ("..." if len(section.summary) > 2000 else "")
                 parts.append(
                     f'{indent}  <div class="section-summary">'
                     f'{indent}    <h5>AI Summary</h5>'
