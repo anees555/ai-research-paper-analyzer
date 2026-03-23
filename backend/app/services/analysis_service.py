@@ -272,15 +272,22 @@ class AnalysisService:
 
     def postprocess_summary(self, summary):
         import re
-        sentences = re.split(r'(?<=[.!?]) +', summary)
-        if not sentences:
-            return summary.strip()
-        if not re.match(r'.*[.!?]$', sentences[-1]):
-            sentences = sentences[:-1]
-        result = " ".join(sentences).strip()
-        if result:
-            result = result[0].upper() + result[1:]
-        return result
+        cleaned = summary
+        # Remove only the 'Paper Summary Abstract:' section and its content, up to the next section header or end
+        cleaned = re.sub(r'Paper Summary Abstract:[\s\S]*?(?=(\n[A-Z][a-z]+\n|Introduction:|Method:|Conclusion:|Results:|Experiment:|$))', '', cleaned, flags=re.IGNORECASE)
+        # Remove extra whitespace left by removal
+        cleaned = re.sub(r'\n{2,}', '\n\n', cleaned)
+        # Remove URLs, emails, and numbers
+        cleaned = re.sub(r'https?://\S+|www\.\S+', '', cleaned)
+        cleaned = re.sub(r'\S+@\S+', '', cleaned)
+        cleaned = re.sub(r'\b\d+\b', '', cleaned)
+        # Remove bracketed numbers like [1], [2]
+        cleaned = re.sub(r'\[\d+\]', '', cleaned)
+        # Remove long garbage tokens
+        cleaned = re.sub(r'\b\w{30,}\b', '', cleaned)
+        # Remove extra whitespace
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        return cleaned
 
     def get_section_settings(self, section_name):
         """Return generation settings for each section type."""
