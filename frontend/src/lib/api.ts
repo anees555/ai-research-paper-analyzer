@@ -12,7 +12,7 @@ import {
 } from "@/types/api";
 
 // Processing mode types
-export type ProcessingMode = "fast" | "balanced" | "comprehensive" | "enhanced";
+export type ProcessingMode = "fast" | "balanced" | "comprehensive" | "enhanced" | "interactive";
 
 export interface ProcessingModeInfo {
   name: string;
@@ -99,6 +99,7 @@ export const uploadPaper = async (
   const formData = new FormData();
   formData.append("file", file);
   
+  // Support interactive mode
   const response = await api.post(`/analysis/upload?mode=${mode}`, formData, {
     headers: {
       "Content-Type": "multipart/form-data",
@@ -146,6 +147,7 @@ export const uploadPaperInstant = async (
   const formData = new FormData();
   formData.append("file", file);
   
+  // Support interactive mode
   const response = await api.post(`/analysis/analyze-instant?mode=${mode}`, formData, {
     headers: {
       "Content-Type": "multipart/form-data",

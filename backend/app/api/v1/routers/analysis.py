@@ -16,9 +16,13 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
+from app.interactive_navigation.navigation_service import interactive_navigation_service
+
 class ProcessingMode(str, Enum):
     FAST = "fast"          # 30-60 seconds, abstract + 3-paragraph summary  
     ENHANCED = "enhanced"  # 120-300 seconds, professional structured analysis with figures
+    INTERACTIVE = "interactive"  # Interactive navigation mode: diagrams, clickable TOC
 
 
 async def process_analysis_task(job_id: str, file_path: str, mode: str = "fast"):
@@ -30,8 +34,90 @@ async def process_analysis_task(job_id: str, file_path: str, mode: str = "fast")
         # Update status to processing
         job_queue.update_job(db, job_id, JobStatus.PROCESSING)
 
+
         # Use the new robust section-wise pipeline for all modes
-        result = await analysis_service.analyze_paper(file_path, job_id)
+        if mode == ProcessingMode.FAST:
+            result = await fast_analysis_service.analyze_fast(file_path, job_id)
+        elif mode == ProcessingMode.ENHANCED:
+            result = await enhanced_analysis_service.analyze_paper_enhanced(file_path, job_id)
+        elif mode == ProcessingMode.INTERACTIVE:
+            # Extract real sections/subsections from the PDF using the robust parser
+            from scripts.parse_pdf_optimized import parse_pdf_with_grobid_optimized as parse_pdf_with_grobid
+            # Parse PDF and extract structure
+            paper_data = analysis_service._paper_data_cache.get(job_id)
+            if not paper_data:
+                paper_data = parse_pdf_with_grobid(file_path, "output")
+                analysis_service._store_paper_data(job_id, paper_data)
+
+
+            # Build section list for TOC (with content for frontend display)
+            sections = []
+            section_id_map = {}
+            if paper_data and "sections" in paper_data:
+                for idx, (title, content) in enumerate(paper_data["sections"].items()):
+                    # Heuristic: Level 1 for main sections, Level 2 for subsections (if ':' or '-' in title)
+                    level = 2 if any(sep in title for sep in [":", "-"]) else 1
+                    sec_id = f"sec{idx+1}"
+                    section_id_map[title] = sec_id
+                    sections.append({
+                        "title": title,
+                        "id": sec_id,
+                        "level": level,
+                        "content": content
+                    })
+
+            # Generate TOC (with content for each node)
+            def toc_with_content(sections):
+                toc = []
+                stack = []
+                for section in sections:
+                    node = {"title": section["title"], "id": section["id"], "level": section["level"], "content": section["content"], "children": []}
+                    while stack and section["level"] <= stack[-1]["level"]:
+                        stack.pop()
+                    if stack:
+                        stack[-1]["node"]["children"].append(node)
+                    else:
+                        toc.append(node)
+                    stack.append({"level": section["level"], "node": node})
+                return toc
+
+            toc = toc_with_content(sections)
+
+
+
+            # Generate a Mermaid diagram string from the section flow
+            try:
+                mermaid_diagram = interactive_navigation_service.generate_mermaid_diagram(sections)
+                if not mermaid_diagram or not mermaid_diagram.strip().startswith("graph"):
+                    logger.warning(f"[Interactive] Mermaid diagram not generated or invalid for job {job_id}. Sections: {sections}")
+                    mermaid_diagram = "graph TD\nA[No sections found]"
+            except Exception as e:
+                logger.error(f"[Interactive] Failed to generate Mermaid diagram for job {job_id}: {e}")
+                mermaid_diagram = "graph TD\nA[Diagram generation error]"
+
+            # Build PaperMetadata
+            from app.data_models.schemas import AnalysisResult, PaperMetadata
+            metadata = PaperMetadata(
+                title=paper_data.get("title", "Unknown"),
+                authors=paper_data.get("authors", []),
+                paper_id=job_id,
+                num_sections=len(sections),
+                processing_method="interactive"
+            )
+            # Place toc and diagram in comprehensive_analysis for frontend access
+            result = AnalysisResult(
+                metadata=metadata,
+                quick_summary=None,
+                detailed_summary=None,
+                comprehensive_analysis={
+                    "toc": toc,
+                    "diagram": mermaid_diagram
+                },
+                original_abstract=paper_data.get("abstract", None),
+                table_of_contents=None
+            )
+        else:
+            result = await analysis_service.analyze_paper(file_path, job_id)
 
         # Update status to completed
         job_queue.update_job(db, job_id, JobStatus.COMPLETED, result=result)
@@ -72,7 +158,7 @@ async def process_analysis_task(job_id: str, file_path: str, mode: str = "fast")
 async def upload_paper(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    mode: ProcessingMode = Query(ProcessingMode.FAST, description="Processing mode: fast (~60s, 3-paragraph summary) or enhanced (~300s, professional analysis)"),
+    mode: ProcessingMode = Query(ProcessingMode.FAST, description="Processing mode: fast (~60s, 3-paragraph summary), enhanced (~300s, professional analysis), or interactive (diagrams, clickable TOC)"),
     db: Session = Depends(get_db),
     # current_user = Depends(deps.get_current_user)  # Temporarily disabled for testing
 ):
@@ -189,9 +275,10 @@ async def get_processing_modes():
     """
     Get information about available processing modes.
     
-    Two modes available:
+    Three modes available:
     - fast: Quick 3-paragraph summary (abstract + problem + solution + conclusion)
     - enhanced: Professional structured analysis with figures and glossary
+    - interactive: Interactive navigation with diagrams and clickable TOC
     """
     return {
         "modes": {
@@ -226,10 +313,23 @@ async def get_processing_modes():
                 ],
                 "ai_models": "PRIMERA (scientific papers)",
                 "recommended_for": "Professional reports, detailed analysis, presentations"
+            },
+            "interactive": {
+                "name": "Interactive Navigation Mode",
+                "estimated_time": "10-30 seconds",
+                "description": "Interactive diagrams and clickable table of contents for research paper navigation.",
+                "features": [
+                    "Clickable table of contents",
+                    "Contribution flow diagrams",
+                    "Section navigation",
+                    "Integration-ready for frontend visualizations"
+                ],
+                "ai_models": False,
+                "recommended_for": "Interactive exploration, presentations, teaching"
             }
         },
         "default_mode": "fast",
-        "supported_modes": ["fast", "enhanced"]
+        "supported_modes": ["fast", "enhanced", "interactive"]
     }
 
 

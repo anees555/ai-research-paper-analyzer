@@ -1,4 +1,5 @@
 "use client";
+import MermaidTest from "@/components/analysis/MermaidTest";
 
 import { useAnalysis } from "@/hooks/use-analysis";
 import { useEffect, useState } from "react";
@@ -9,11 +10,35 @@ import { cn } from "@/lib/utils";
 import { PaperChat } from "@/components/chat/paper-chat";
 import { AnalysisDisplay } from "@/components/analysis/analysis-display";
 import { TOCDisplay } from "@/components/analysis/toc-display";
+import type { TOCSection } from "@/components/analysis/toc-to-mermaid";
+import InteractiveNavigation from "@/components/analysis/interactive-navigation";
+import { tocToMermaid } from "@/components/analysis/toc-to-mermaid";
 
 export default function AnalysisPage() {
   const params = useParams();
   const jobId = params.id as string;
-  const [instantResult, setInstantResult] = useState<any | null>(null);
+  // Use correct TOCSection type for table_of_contents and TOCDisplay
+  type ComprehensiveAnalysis = {
+    toc?: TOCSection[];
+    diagram?: string;
+    glossary?: Record<string, string>;
+    html_summary?: string;
+    figures?: Array<{ url: string; caption?: string; description?: string; page?: number }>;
+  };
+  type ResultType = {
+    table_of_contents?: TOCSection[];
+    metadata: {
+      title: string;
+      authors: string[];
+      num_sections?: number;
+      processing_method?: string;
+    };
+    original_abstract?: string;
+    quick_summary?: string;
+    comprehensive_analysis?: ComprehensiveAnalysis;
+    detailed_summary?: Record<string, string>;
+  };
+  const [instantResult, setInstantResult] = useState<ResultType | null>(null);
   const isInstant = jobId && jobId.startsWith("instant-");
   const { data: job, isLoading, error } = useAnalysis(isInstant ? "" : jobId);
 
@@ -27,65 +52,22 @@ export default function AnalysisPage() {
   }, [isInstant, jobId]);
 
   if (isInstant && instantResult) {
-    // Render instant result using the same UI as enhanced mode
+    // INTERACTIVE MODE: Only show interactive navigation UI, never fallback to summary/abstract
     const result = instantResult;
-    const hasTOC = result.table_of_contents && result.table_of_contents.length > 0;
-    return (
-      <div className="flex flex-col min-h-screen">
-        {hasTOC && result.table_of_contents ? (
-          <>
-            <TOCDisplay
-              toc={result.table_of_contents}
-              metadata={{
-                title: result.metadata?.title || "Summary",
-                authors: result.metadata?.authors || [],
-                sections: result.metadata?.num_sections,
-              }}
-              glossary={result.comprehensive_analysis?.glossary || {}}
-            />
-          </>
-        ) : (
-          <>
-            <AnalysisDisplay
-              title={result.metadata?.title || "Summary"}
-              abstract={result.original_abstract}
-              htmlContent={
-                result.comprehensive_analysis?.html_summary ||
-                `<h2>Summary</h2>${(result.quick_summary || result.original_abstract)
-                  .split(/\n\n+/)
-                  .map(p => `<p>${p.trim()}</p>`)
-                  .join('')}`
-              }
-              glossary={result.comprehensive_analysis?.glossary || {}}
-              figures={result.comprehensive_analysis?.figures?.map((fig: any) => ({
-                url: fig.url,
-                caption: fig.caption || fig.description || "Figure",
-                page: fig.page || 1,
-              })) || []}
-              metadata={{
-                authors: result.metadata?.authors || [],
-                num_sections: result.metadata?.num_sections,
-                processing_method: result.metadata?.processing_method,
-              }}
-            />
-            {/* Section summaries, if present */}
-            {result.detailed_summary && Object.keys(result.detailed_summary).length > 0 && (
-              <div className="max-w-4xl mx-auto p-8">
-                <h2 className="text-2xl font-bold mb-4">Section Summaries</h2>
-                {Object.entries(result.detailed_summary).map(([section, summary]) => (
-                  <div key={section} className="mb-6">
-                    <h3 className="text-xl font-semibold mb-2">{section}</h3>
-                    <p className="leading-relaxed text-gray-700 dark:text-gray-300">{summary}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-        {/* Disabled PaperChat for fast mode (no jobId) */}
-        <div className="max-w-4xl mx-auto pb-8">
-          <PaperChat jobId={null} paperTitle={result.metadata?.title || "Summary"} disabled reason="Chat is only available for enhanced mode analyses." />
+    // Fix: extract TOC array from object if needed (only use toc if it's an array)
+    const toc = Array.isArray(result.comprehensive_analysis?.toc) ? result.comprehensive_analysis.toc : undefined;
+    let diagram = toc && toc.length > 0 ? tocToMermaid(toc) : result.comprehensive_analysis?.diagram;
+    if (toc && diagram) {
+      return (
+        <div className="flex flex-col min-h-screen">
+          <InteractiveNavigation toc={toc} diagram={diagram} />
         </div>
+      );
+    }
+    // If no TOC/diagram, show nothing (or a message)
+    return (
+      <div className="flex flex-col min-h-screen items-center justify-center">
+        <div className="text-gray-500 text-lg mt-12">Interactive navigation data not available for this paper.</div>
       </div>
     );
   }
@@ -99,6 +81,7 @@ export default function AnalysisPage() {
         </h2>
         <p className="text-gray-500">Connecting to server</p>
       </div>
+      
     );
   }
 
@@ -197,60 +180,42 @@ export default function AnalysisPage() {
   }
 
   // Completed State
-  const result = job.result!;
-  const hasTOC = result.table_of_contents && result.table_of_contents.length > 0;
-  
+  const result = job.result! as ResultType;
+  // Interactive mode: check for toc/diagram in comprehensive_analysis
+  const toc = Array.isArray(result.comprehensive_analysis?.toc) ? result.comprehensive_analysis.toc : undefined;
+  let diagram = toc && toc.length > 0 ? tocToMermaid(toc) : result.comprehensive_analysis?.diagram;
+  if (toc && diagram) {
+    // Force interactive mode if TOC and diagram are present
+    return (
+      <div className="flex flex-col min-h-screen">
+        <InteractiveNavigation toc={toc} diagram={diagram} />
+      </div>
+    );
+  }
+  // ENHANCED MODE: Show original abstract and sectionwise summary for Introduction, Method, Conclusion only
+  const introSummary = result.detailed_summary?.Introduction || result.detailed_summary?.introduction;
+  const methodSummary = result.detailed_summary?.Method || result.detailed_summary?.method;
+  const conclusionSummary = result.detailed_summary?.Conclusion || result.detailed_summary?.conclusion;
   return (
     <div className="flex flex-col min-h-screen">
-      {hasTOC && result.table_of_contents ? (
-        // Display hierarchical TOC with dual content panels
-        <>
-          <TOCDisplay 
-            toc={result.table_of_contents}
-            metadata={{
-              title: result.metadata.title,
-              authors: result.metadata.authors,
-              sections: result.metadata.num_sections,
-            }}
-            glossary={result.comprehensive_analysis?.glossary || {}}
-          />
-        </>
-      ) : (
-        // Fallback to traditional analysis display
-        <>
-          <AnalysisDisplay
-            title={result.metadata.title}
-            abstract={result.original_abstract}
-            htmlContent={
-              result.comprehensive_analysis?.html_summary || 
-              `<h2>Summary</h2><p>${result.quick_summary || result.original_abstract}</p>`
-            }
-            glossary={result.comprehensive_analysis?.glossary || {}}
-            figures={result.comprehensive_analysis?.figures?.map((fig: any) => ({
-              url: `http://localhost:8003${fig.url}`,
-              caption: fig.caption || fig.description || "Figure",
-              page: fig.page || 1,
-            })) || []}
-            metadata={{
-              authors: result.metadata.authors,
-              num_sections: result.metadata.num_sections,
-              processing_method: result.metadata.processing_method,
-            }}
-          />
-          {/* PATCH: Show all section summaries below main display */}
-          {result.detailed_summary && Object.keys(result.detailed_summary).length > 0 && (
-            <div className="max-w-4xl mx-auto p-8">
-              <h2 className="text-2xl font-bold mb-4">Section Summaries</h2>
-              {Object.entries(result.detailed_summary).map(([section, summary]) => (
-                <div key={section} className="mb-6">
-                  <h3 className="text-xl font-semibold mb-2">{section}</h3>
-                  <p className="leading-relaxed text-gray-700 dark:text-gray-300">{summary}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      <AnalysisDisplay
+        title={result.metadata.title}
+        abstract={result.original_abstract}
+        htmlContent={`<h2>Introduction</h2><p>${introSummary || "No summary available."}</p>
+          <h2>Method</h2><p>${methodSummary || "No summary available."}</p>
+          <h2>Conclusion</h2><p>${conclusionSummary || "No summary available."}</p>`}
+        glossary={result.comprehensive_analysis?.glossary || {}}
+        figures={result.comprehensive_analysis?.figures?.map((fig) => ({
+          url: fig.url?.startsWith("http") ? fig.url : `http://localhost:8003${fig.url}`,
+          caption: fig.caption || fig.description || "Figure",
+          page: fig.page || 1,
+        })) || []}
+        metadata={{
+          authors: result.metadata.authors,
+          num_sections: result.metadata.num_sections,
+          processing_method: result.metadata.processing_method,
+        }}
+      />
       <PaperChat jobId={jobId} paperTitle={result.metadata.title} />
     </div>
   );

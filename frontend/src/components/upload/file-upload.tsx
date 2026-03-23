@@ -206,6 +206,16 @@ const FileUpload: React.FC = () => {
               />
               <span className="ml-2">Enhanced/Professional (Detailed)</span>
             </label>
+            <label>
+              <input
+                type="radio"
+                name="mode"
+                value="interactive"
+                checked={selectedMode === "interactive"}
+                onChange={() => setSelectedMode("interactive")}
+              />
+              <span className="ml-2">Interactive (TOC & Diagram)</span>
+            </label>
           </div>
         </div>
         <div

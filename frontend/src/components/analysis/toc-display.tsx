@@ -5,15 +5,7 @@ import { ChevronDown, ChevronRight, Menu, X, Moon, Sun, Download } from "lucide-
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/theme-context";
 
-interface TOCSection {
-  title: string;
-  level: number;
-  number?: string;
-  content: string;
-  summary?: string;
-  page?: number;
-  children?: TOCSection[];
-}
+import type { TOCSection } from "./toc-to-mermaid";
 
 interface TOCDisplayProps {
   toc: TOCSection[];

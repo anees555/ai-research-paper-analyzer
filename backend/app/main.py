@@ -33,6 +33,10 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["analysis"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 
+# Register interactive navigation router
+from app.interactive_navigation import router as interactive_navigation_router
+app.include_router(interactive_navigation_router.router, prefix="/api/v1/interactive-navigation", tags=["interactive-navigation"])
+
 # Mount static files for serving figures
 static_dir = os.path.join(os.path.dirname(__file__), "../data/figures")
 os.makedirs(static_dir, exist_ok=True)
