@@ -1,350 +1,289 @@
 # AI Research Paper Analyzer
 
-A comprehensive AI-powered research paper analysis system that processes academic PDFs to generate intelligent summaries, extract metadata, and enable natural language conversations with research papers.
+AI Research Paper Analyzer is a full-stack application for uploading academic PDFs, generating structured summaries, extracting figures, and running paper-scoped Q&A over indexed content.
 
-## Overview
+## Current Implementation Summary
 
-This application leverages state-of-the-art machine learning models and natural language processing techniques to transform complex academic papers into accessible, structured summaries. The system combines GROBID-based PDF parsing, transformer-based summarization models, and retrieval-augmented generation (RAG) for interactive paper exploration.
+### Core capabilities
 
-## Key Features
+- PDF ingestion and parsing using GROBID and custom section extraction.
+- Multi-mode analysis pipeline:
+  - `fast`: quick summary path.
+  - `enhanced`: structured, section-oriented analysis with figure extraction.
+  - `interactive`: TOC/diagram-oriented output for interactive navigation.
+- Background job processing with status polling.
+- Authentication (register/login with JWT) and user history APIs.
+- Chat system with retrieval-augmented generation (RAG):
+  - Paper content chunking and indexing.
+  - Vector search over indexed chunks.
+  - Context-grounded answer generation with optional Groq LLM enhancement.
+- Frontend analysis pages, interactive navigation, and integrated paper chat.
+- Local reverse-proxy + public tunnel helpers for sharing one public URL.
 
-### Intelligent PDF Processing
-- Academic structure extraction using GROBID service
-- Automatic section detection and hierarchy preservation
-- Metadata extraction including authors, affiliations, and citations
-- Figure and table caption analysis
+### Technology stack
 
-### AI-Powered Summarization
-- Multiple summarization models: DistilBART, BART-Large-CNN, and Longformer
-- Executive summary generation with grammar correction
-- Section-wise detailed breakdowns
-- Key contribution and results extraction
-- Technical term glossary generation
+- Backend: FastAPI, SQLAlchemy, Pydantic, Uvicorn
+- Frontend: Next.js (App Router), React, TypeScript, Tailwind CSS, Axios
+- NLP/ML: Transformers, sentence-transformers
+- Vector store: ChromaDB
+- PDF/structure extraction: GROBID
 
-### Interactive Chat Interface
-- RAG-powered conversations with uploaded papers
-- Context-aware responses using ChromaDB vector storage
-- Groq API integration for enhanced language understanding
-- Chat history management and session persistence
-
-### Professional Analysis Output
-- Comprehensive HTML summaries with proper formatting
-- Bold headings and hierarchical text sizing
-- Research methodology and approach analysis
-- Practical implications and findings
-- Quality scoring and completeness metrics
-
-### Performance Optimization
-- Model caching and lazy loading
-- Memory-efficient operation with DistilBART preloading
-- Async processing for large documents
-- Background model initialization
-
-## Implementation Status
-
-### Completed Features
-
-The following core functionalities are fully operational and production-ready:
-
-**PDF Upload and Analysis Pipeline**
-- Multi-mode processing system with four distinct quality levels: Fast, Balanced, Comprehensive, and Enhanced Professional
-- Automatic paper structure extraction via GROBID integration running on Docker
-- Robust file validation and error handling with detailed user feedback
-- Background job queue for long-running analysis tasks
-
-**Intelligent Summarization System**
-- Fast mode uses extractive methods and rule-based analysis for quick overviews
-- Balanced mode employs lightweight AI models like DistilBART for efficient processing
-- Comprehensive mode leverages BART-Large-CNN for research-grade quality summaries
-- Enhanced Professional mode generates structured HTML outputs with technical glossaries
-- Grammar correction and redundancy removal applied to all AI-generated content
-- Section-wise detailed breakdowns with proper hierarchical display
-
-**RAG-Powered Conversational Interface**
-- Semantic search using all-MiniLM-L6-v2 embeddings with 384-dimensional vectors
-- ChromaDB vector storage with persistent paper-specific collections
-- Intelligent chunking strategy with 800-character segments and 100-character overlap
-- Top-k retrieval with configurable similarity thresholds for optimal context assembly
-- Groq API integration for high-quality responses with automatic fallback to heuristic methods
-- Session-aware conversation management with complete chat history persistence
-- Per-paper scoping prevents cross-document contamination in responses
-
-**Figure and Caption Extraction**
-- Automated extraction of visual elements from PDF pages using PyMuPDF
-- Pattern-based caption detection and association with corresponding figures
-- Metadata capture including page numbers, dimensions, and figure indices
-- Clean presentation in the analysis interface with fallback handling for unavailable images
-
-**User Experience and Interface**
-- Modern responsive Next.js frontend with TailwindCSS styling
-- Real-time analysis progress tracking with status indicators
-- Drag-and-drop file upload with processing mode selection
-- Interactive chat widget with source attribution and confidence scoring
-- Analysis history tracking and quick re-access to previous results
-- System health monitoring and backend connectivity status
-
-**Additional Implemented Capabilities**
-- JWT-based user authentication and authorization system
-- User profile management and personalized analysis history
-- Comprehensive metadata extraction for authors, affiliations, and paper structure
-- Quality scoring and analysis completeness metrics
-- Professional HTML formatting with bold hierarchical headings
-
-### Features in Development
-
-The following features are planned for future releases to enhance the platform:
-
-**Interactive Table of Contents**
-- Automated extraction of document outline with all section hierarchies
-- Clickable navigation system allowing users to jump directly to specific sections
-- Expandable and collapsible subsection views for better document exploration
-- This feature will significantly improve navigation for lengthy research papers
-
-**Visual Flow Diagram Generation**
-- Automated creation of graphical representations showing research contribution flow
-- Visual mapping from problem statement through methodology to findings and conclusions
-- Node-based diagram rendering using modern charting libraries
-- This visualization will help users quickly grasp the paper's logical structure
-
-These remaining features represent natural extensions of the existing architecture and will be implemented without requiring significant refactoring of the current codebase.
-
-## Technology Stack
+## Architecture
 
 ### Backend
-- **Framework**: FastAPI (Python 3.13+)
-- **Database**: PostgreSQL with SQLAlchemy ORM
-- **PDF Processing**: GROBID (Docker service)
-- **AI Models**: 
-  - Transformers (HuggingFace)
-  - DistilBART for fast summarization
-  - BART-Large-CNN for high-quality summaries
-  - Longformer/LED for long documents
-- **Vector Database**: ChromaDB for semantic search
-- **LLM Integration**: Groq API
-- **Authentication**: JWT-based security
+
+- API entry: `backend/app/main.py`
+- Service layer: `backend/app/services`
+- Routers: `backend/app/api/v1/routers`
+- Data models/schemas: `backend/app/data_models`
+- Default API base path: `/api/v1`
 
 ### Frontend
-- **Framework**: Next.js 16.1.1 with App Router
-- **Language**: TypeScript
-- **Styling**: TailwindCSS
-- **State Management**: React Query
-- **HTTP Client**: Axios
 
-## Installation
+- App entry: `frontend/src/app`
+- API client: `frontend/src/lib/api.ts`
+- The frontend API client now supports:
+  - direct backend URL when accessed from localhost
+  - proxy-relative API calls (`/api/v1`) for tunneled/remote access
 
-### Prerequisites
-- Python 3.8 or higher (Python 3.13+ recommended)
-- Node.js 18 or higher (Node.js 25+ recommended)
-- Docker for running GROBID service
-- Git for version control
+### Chat (RAG) flow
 
-### Step 1: Clone Repository
-```bash
-git clone <repository-url>
-cd research_summary_project
+1. A paper is analyzed and represented as sections/summary content.
+2. Content is chunked and indexed in Chroma.
+3. On question requests, relevant chunks are retrieved by similarity.
+4. Answer generation uses retrieved context, with source attribution and confidence.
+
+## Repository Layout
+
+```text
+research_summary_project/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/routers/
+│   │   ├── core/
+│   │   ├── data_models/
+│   │   ├── interactive_navigation/
+│   │   └── services/
+│   ├── data/
+│   │   ├── chroma_chat_db/
+│   │   ├── figures/
+│   │   └── uploads/
+│   ├── main.py
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── contexts/
+│   │   ├── lib/
+│   │   └── types/
+│   └── package.json
+├── infra/
+│   └── local-share/
+│       ├── Caddyfile
+│       ├── start-proxy.ps1
+│       ├── start-cloudflare.ps1
+│       ├── start-ngrok.ps1
+│       └── README.md
+└── README.md
 ```
 
-### Step 2: Backend Setup
-```bash
-# Create and activate virtual environment
-python -m venv .venv
+## Prerequisites
 
-# Windows
-.\.venv\Scripts\activate
+- Python 3.10+
+- Node.js 18+
+- Docker (for GROBID)
+- PostgreSQL-compatible database reachable by `DATABASE_URL`
+- Windows PowerShell (for helper scripts in `infra/local-share`)
 
-# Linux/Mac
-source .venv/bin/activate
+## Environment Configuration
 
-# Install dependencies
-pip install -r requirements.txt
-```
+Create `.env` from `.env.example` in project root and update values:
 
-### Step 3: Environment Configuration
-Create a `.env` file in the project root:
+- `DATABASE_URL`
+- `GROQ_API_KEY` (optional but recommended for better chat responses)
+- `SECRET_KEY`
+- `GROBID_URL` (default: `http://localhost:8070`)
+
+Example:
+
 ```env
-GROQ_API_KEY=your_groq_api_key_here
-DATABASE_URL=postgresql://user:password@localhost:5432/research_db
-JWT_SECRET=your_secret_key_here
+DATABASE_URL=postgresql://username:password@host:5432/database
+GROQ_API_KEY=your_groq_api_key
+SECRET_KEY=replace_with_secure_random_value
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+GROBID_URL=http://localhost:8070
 ```
 
-### Step 4: Start GROBID Service
-```bash
-docker pull lfoppiano/grobid:0.8.0
-docker run -d -p 8070:8070 --name grobid-research lfoppiano/grobid:0.8.0
+## Local Setup
+
+### 1) Backend
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r backend/requirements.txt
 ```
 
-### Step 5: Frontend Setup
-```bash
-cd frontend
+### 2) Frontend
+
+```powershell
+Set-Location frontend
 npm install
+Set-Location ..
+```
+
+### 3) Start GROBID
+
+```powershell
+docker run -d --name grobid -p 8070:8070 lfoppiano/grobid:0.8.0
+```
+
+If container already exists:
+
+```powershell
+docker start grobid
 ```
 
 ## Running the Application
 
-### Development Mode
+### Terminal 1: Backend API (port 8003)
 
-**Backend**:
-```bash
-# From project root
-cd backend
-python main.py
-# API runs on http://localhost:8003
-```
-
-**Frontend**:
-```bash
-# From project root
-cd frontend
-npm run dev
-# Frontend runs on http://localhost:3000
-```
-
-### Quick Start (After Initial Setup)
-
-**Windows PowerShell**:
 ```powershell
 .\.venv\Scripts\Activate.ps1
-docker start grobid-research
-cd backend; python main.py
-# In new terminal
-cd frontend; npm run dev
+Set-Location backend
+python main.py
 ```
 
-**Linux/Mac**:
-```bash
-source .venv/bin/activate && docker start grobid-research
-cd backend && python main.py &
-cd frontend && npm run dev
+### Terminal 2: Frontend (port 3000)
+
+```powershell
+Set-Location frontend
+npm run dev
 ```
 
-## API Endpoints
+### Local URLs
 
-### Analysis Endpoints
-- `POST /api/analysis/upload` - Upload and analyze PDF
-- `GET /api/analysis/{job_id}` - Get analysis results
-- `GET /api/analysis/list` - List all analyses
-- `DELETE /api/analysis/{job_id}` - Delete analysis
+- Frontend: `http://localhost:3000`
+- Backend API docs: `http://localhost:8003/docs`
+- Health: `http://localhost:8003/api/v1/health`
 
-### Chat Endpoints
-- `POST /api/chat/message` - Send chat message
-- `GET /api/chat/history/{paper_id}` - Get chat history
-- `DELETE /api/chat/{session_id}` - Clear chat session
+## Public Sharing (One URL for Frontend + Backend)
 
-### System Endpoints
-- `GET /api/health` - Health check
-- `GET /api/isalive` - Service status
+This project includes isolated helper scripts in `infra/local-share`.
 
-## Project Structure
+### 1) Start local reverse proxy
 
-```
-research_summary_project/
-├── backend/
-│   ├── app/
-│   │   ├── api/          # API routes
-│   │   ├── core/         # Configuration
-│   │   ├── data_models/  # Pydantic models
-│   │   └── services/     # Business logic
-│   ├── data/             # Uploads and databases
-│   └── main.py           # Application entry
-├── frontend/
-│   └── src/
-│       ├── app/          # Next.js pages
-│       ├── components/   # React components
-│       ├── contexts/     # State contexts
-│       └── types/        # TypeScript types
-├── src/
-│   └── scripts/          # Utility scripts
-└── .env                  # Environment variables
+```powershell
+Set-Location infra/local-share
+./start-proxy.ps1
 ```
 
-## Recent Enhancements
+Proxy URL:
 
-### v2.0 - Professional Analysis System
-- Added sentence redundancy removal for cleaner output
-- Enhanced section summary extraction with 2000-character limit
-- Improved formatting with hierarchical font sizes and bold headings
+- `http://localhost:8080`
 
-### Content Quality Improvements
-- Real content extraction from abstracts and introductions
-- Fallback mechanisms to avoid generic placeholder text
-- Minimum content length validation (50 characters per section)
-- Short section title filtering (removes fragments like "The", "A")
-- Full text extraction including nested XML elements
+### 2) Expose proxy publicly
 
-### UI/UX Enhancements
-- Professional heading hierarchy (24px main, 20px sub, 16px content)
-- Bold formatting for all section headings
-- Increased line heights for better readability
-- Responsive detailed breakdown section with proper spacing
+Cloudflare quick tunnel:
 
-### Performance Optimizations
-- Memory-efficient model loading (DistilBART-only preloading)
-- On-demand loading for larger models (BART-Large-CNN, Longformer)
-- Background async model initialization
-- Graceful degradation for memory-constrained systems
+```powershell
+Set-Location infra/local-share
+./start-cloudflare.ps1
+```
 
-## Configuration
+or ngrok:
 
-### Model Settings
-The system supports three summarization quality levels:
-- **Fast**: DistilBART (preloaded, ~5 seconds startup)
-- **Balanced**: BART-Large-CNN (on-demand, high quality)
-- **Long Documents**: Longformer/LED (on-demand, 16K tokens)
+```powershell
+Set-Location infra/local-share
+./start-ngrok.ps1
+```
 
+Notes:
 
-### Processing Modes
-- **Enhanced Mode**: Full AI analysis with all features
-- **Fast Mode**: Quick processing with optimized pipeline
-- **Basic Mode**: Rule-based extraction only
+- Keep backend, frontend, proxy, and tunnel processes running.
+- Quick tunnel URLs are temporary and change when restarted.
+
+## API Endpoints (Current)
+
+### Health
+
+- `GET /api/v1/health`
+
+### Authentication
+
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login/access-token`
+
+### User
+
+- `GET /api/v1/users/me`
+- `GET /api/v1/users/me/history`
+
+### Analysis
+
+- `POST /api/v1/analysis/upload?mode=fast|enhanced|interactive`
+- `GET /api/v1/analysis/status/{job_id}`
+- `POST /api/v1/analysis/analyze-instant?mode=fast|enhanced`
+- `GET /api/v1/analysis/modes`
+- `POST /api/v1/analysis/enhanced`
+- `POST /api/v1/analysis/professional`
+
+### Chat
+
+- `POST /api/v1/chat/ask`
+- `POST /api/v1/chat/index/{job_id}`
+- `GET /api/v1/chat/status/{job_id}`
+
+## Processing Modes
+
+- `fast`: short turnaround summary flow.
+- `enhanced`: deeper section-level analysis with figure extraction and richer output.
+- `interactive`: output designed for interactive TOC/diagram visualization.
+
+## Data Storage
+
+- Uploaded files: `backend/data/uploads`
+- Extracted figures: `backend/data/figures`
+- Chat vector index: `backend/data/chroma_chat_db`
+- Processed output artifacts: `backend/output`
+
+## Operational Notes
+
+- Chat quality depends on successful indexing after analysis completion.
+- If `GROQ_API_KEY` is not set, chat falls back to a simpler context-based response path.
+- Some legacy root-level batch scripts reference older ports; the current implementation uses backend port `8003` and frontend port `3000`.
 
 ## Troubleshooting
 
-### Common Issues
+### Registration or login fails on mobile via tunnel
 
-**GROBID Connection Errors**:
-```bash
-# Verify GROBID is running
-curl http://localhost:8070/api/isalive
+- Ensure frontend is using proxy-relative API path for remote hosts.
+- Keep proxy and tunnel running.
+- Verify health through the same public domain:
+  - `https://<your-public-domain>/api/v1/health`
 
-# Restart GROBID if needed
-docker restart grobid-research
+### Chat returns low-context answers
+
+- Confirm paper indexing completed:
+  - `GET /api/v1/chat/status/{job_id}`
+- If needed, trigger indexing manually:
+  - `POST /api/v1/chat/index/{job_id}`
+
+### GROBID unavailable
+
+- Check container status:
+
+```powershell
+docker ps
 ```
 
-**Memory Errors (Paging File Too Small)**:
-- System uses DistilBART by default for memory efficiency
-- Larger models (BART-Large-CNN) require sufficient virtual memory
-- Increase Windows paging file or use default DistilBART
+- Verify endpoint:
 
-**Model Loading Timeouts**:
-- First run downloads models (may take several minutes)
-- Models cached in `~/.cache/huggingface/`
-- Subsequent runs use cached models
-
-**Frontend Connection Issues**:
-- Ensure backend is running on port 8003
-- Check CORS settings in backend configuration
-- Verify environment variables are loaded
-
-## Contributing
-
-Contributions are welcome. Please follow these guidelines:
-1. Fork the repository
-2. Create a feature branch
-3. Make changes with clear commit messages
-4. Ensure code passes linting and type checks
-5. Submit pull request with detailed description
+```powershell
+curl http://localhost:8070/api/isalive
+```
 
 ## License
 
-This project is licensed under the MIT License.
-
-## Support
-
-For issues, questions, or feature requests, please open an issue on the repository issue tracker.
-
-## Acknowledgments
-
-- GROBID for academic PDF parsing
-- HuggingFace Transformers for NLP models
-- FastAPI and Next.js communities for excellent frameworks
-- Groq for LLM API services
+MIT License.
