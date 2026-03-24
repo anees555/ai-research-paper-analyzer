@@ -5,50 +5,56 @@ import { ConnectionStatus } from "@/components/status/connection-status";
 import { BookOpen, FileText, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import { UserNav } from "@/components/nav/user-nav";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gray-50/50 flex flex-col">
+    <main className="min-h-screen bg-gray-50/60 flex flex-col">
       <Navbar />
-      
+
       <div className="flex-1 flex flex-col items-center justify-center p-6 pb-20">
-        {/* Connection Status */}
         <div className="w-full max-w-2xl mb-6 flex justify-center">
           <ConnectionStatus />
         </div>
-        
+
         <div className="w-full max-w-2xl text-center mb-10 space-y-4">
-            <h2 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
-                Analyze Papers at <span className="text-blue-600">Light Speed</span>
-            </h2>
-            <p className="text-lg text-gray-600 max-w-lg mx-auto leading-relaxed">
-                Upload your research paper PDF to get instant AI-generated summaries, 
-                metadata extraction, and comprehensive analysis.
-            </p>
+          <h2 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
+            Analyze Papers at <span className="text-blue-600">Light Speed</span>
+          </h2>
+          <p className="text-lg text-gray-600 max-w-lg mx-auto leading-relaxed">
+            Upload your research paper PDF to get instant AI-generated summaries,
+            metadata extraction, and comprehensive analysis.
+          </p>
         </div>
-        
-        <FileUpload />
+
+        <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white p-4 md:p-6 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-xl font-semibold text-gray-900">Upload a Paper</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Select a PDF and choose a processing mode.
+            </p>
+          </div>
+          <FileUpload />
+        </div>
 
         <div className="w-full max-w-xl mt-12">
-            <HistoryList />
+          <HistoryList />
         </div>
-        
+
         <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-4xl w-full text-center">
-             <Feature 
-                title="Smart Summaries" 
-                desc="Get concise quick summaries or deep detailed breakdowns."
-             />
-             <Feature 
-                title="Metadata Extraction" 
-                desc="Automatically extract authors, sections, and citations."
-             />
-             <Feature 
-                title="Batch Processing" 
-                desc="Handle multiple papers efficiently in the background."
-             />
+          <Feature
+            title="Smart Summaries"
+            desc="Get concise quick summaries or deep detailed breakdowns."
+          />
+          <Feature
+            title="Metadata Extraction"
+            desc="Automatically extract authors, sections, and citations."
+          />
+          <Feature
+            title="Batch Processing"
+            desc="Handle multiple papers efficiently in the background."
+          />
         </div>
       </div>
     </main>
@@ -56,12 +62,12 @@ export default function Home() {
 }
 
 function Feature({ title, desc }: { title: string; desc: string }) {
-    return (
-        <div className="space-y-2">
-            <h4 className="font-semibold text-gray-900">{title}</h4>
-            <p className="text-sm text-gray-500">{desc}</p>
-        </div>
-    )
+  return (
+    <div className="space-y-2">
+      <h4 className="font-semibold text-gray-900">{title}</h4>
+      <p className="text-sm text-gray-500">{desc}</p>
+    </div>
+  );
 }
 
 function Navbar() {
@@ -112,51 +118,49 @@ function Navbar() {
 }
 
 function HistoryList() {
-    const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
 
-    useEffect(() => {
-        const saved = localStorage.getItem("paper_history");
-        if (saved) {
-            try {
-                setHistory(JSON.parse(saved));
-            } catch (e) {
-                console.error("Failed to parse history", e);
-            }
-        }
-    }, []);
+  useEffect(() => {
+    const saved = localStorage.getItem("paper_history");
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse history", e);
+      }
+    }
+  }, []);
 
-    if (history.length === 0) return null;
+  if (history.length === 0) return null;
 
-    return (
-        <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-gray-500 font-medium px-2">
-                <Clock className="w-4 h-4" />
-                <span>Recent Analysis</span>
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-sm text-gray-500 font-medium px-2">
+        <Clock className="w-4 h-4" />
+        <span>Recent Analysis</span>
+      </div>
+      <div className="bg-white rounded-xl border shadow-sm divide-y overflow-hidden">
+        {history.map((item, i) => (
+          <Link
+            key={i}
+            href={`/analysis/${item.job_id}`}
+            className="flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <FileText className="w-4 h-4" />
             </div>
-            <div className="bg-white rounded-xl border shadow-sm divide-y overflow-hidden">
-                {history.map((item, i) => (
-                    <Link 
-                        key={i} 
-                        href={`/analysis/${item.job_id}`}
-                        className="flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors"
-                    >
-                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                            <FileText className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-medium text-gray-900 truncate">
-                                {item.title || "Untitled Paper"}
-                            </h4>
-                            <p className="text-xs text-gray-500">
-                                {new Date(item.date).toLocaleDateString()}
-                            </p>
-                        </div>
-                        <div className="text-xs text-gray-400">
-                            View
-                        </div>
-                    </Link>
-                ))}
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-medium text-gray-900 truncate">
+                {item.title || "Untitled Paper"}
+              </h4>
+              <p className="text-xs text-gray-500">
+                {new Date(item.date).toLocaleDateString()}
+              </p>
             </div>
-        </div>
-    )
+            <div className="text-xs text-gray-400">View</div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }

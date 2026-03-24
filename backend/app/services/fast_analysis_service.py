@@ -152,10 +152,13 @@ class FastAnalysisService:
 
         quick_summary = "\n\n".join(quick_parts)
 
+        clean_title = enhanced_analysis_service._clean_title(paper_data.get("title", "Unknown Paper"))
+        clean_authors = enhanced_analysis_service._clean_authors(paper_data.get("authors", []))
+
         return AnalysisResult(
             metadata=PaperMetadata(
-                title=paper_data.get("title", "Unknown Paper"),
-                authors=paper_data.get("authors", []),
+                title=clean_title,
+                authors=clean_authors,
                 paper_id=paper_data.get("paper_id", ""),
                 num_sections=len(sections),
                 processing_method="Fast Mode"
@@ -177,10 +180,13 @@ class FastAnalysisService:
         sentences = text.split(".")[:3]
         summary = ". ".join(sentences)
 
+        clean_title = enhanced_analysis_service._clean_title(paper_data.get("title", "Unknown Paper"))
+        clean_authors = enhanced_analysis_service._clean_authors(paper_data.get("authors", []))
+
         return AnalysisResult(
             metadata=PaperMetadata(
-                title=paper_data.get("title", "Unknown Paper"),
-                authors=paper_data.get("authors", []),
+                title=clean_title,
+                authors=clean_authors,
                 paper_id=paper_data.get("paper_id", ""),
                 num_sections=len(paper_data.get("sections", {})),
                 processing_method="Fallback"

@@ -1,4 +1,21 @@
 import React, { useEffect, useRef, useState } from "react";
+// Helper to find section by id in TOC
+import type { TOCSection } from "./toc-to-mermaid";
+// Helper to scroll to TOC section by id
+function scrollToTOCSection(id: string) {
+  const el = document.getElementById(`toc-${id}`);
+  // Debug log
+  // eslint-disable-next-line no-console
+  console.log("[scrollToTOCSection] Scrolling to:", `toc-${id}`, el);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-blue-400");
+    setTimeout(() => el.classList.remove("ring-2", "ring-blue-400"), 1500);
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn("[scrollToTOCSection] Element not found:", `toc-${id}`);
+  }
+}
 import { useTheme } from "@/contexts/theme-context";
 
 
@@ -12,6 +29,7 @@ const InteractiveNavigation: React.FC<InteractiveNavigationProps> = ({ toc, diag
   const [mermaidError, setMermaidError] = useState<string | null>(null);
   const [mermaidSVG, setMermaidSVG] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
+  // Remove modal state
   const isMermaid = typeof diagram === "string" && diagram.startsWith("graph");
   const hasTOC = Array.isArray(toc) && toc.length > 0;
   const { theme } = useTheme ? useTheme() : { theme: "light" };
@@ -36,6 +54,26 @@ const InteractiveNavigation: React.FC<InteractiveNavigationProps> = ({ toc, diag
             setMermaidSVG(result.svg);
             // eslint-disable-next-line no-console
             console.log("[Mermaid SVG generated]", result.svg);
+            // Attach click handlers to nodes
+            setTimeout(() => {
+              if (!toc) return;
+              const svg = document.getElementById("mermaid-diagram-container")?.querySelector("svg");
+              if (svg) {
+                svg.querySelectorAll("g.node.clickable").forEach((el) => {
+                  const elem = el as HTMLElement;
+                  elem.style.cursor = "pointer";
+                  elem.onclick = () => {
+                    // Extract section id from SVG node id (e.g., flowchart-sec1-0 => sec1)
+                    const match = elem.id.match(/flowchart-(sec\d+)(?:-\d+)?/);
+                    const sectionId = match ? match[1] : elem.id;
+                    // Debug log
+                    // eslint-disable-next-line no-console
+                    console.log("[Mermaid node click] id:", elem.id, "-> sectionId:", sectionId);
+                    scrollToTOCSection(sectionId);
+                  };
+                });
+              }
+            }, 100);
           }).catch((err: any) => {
             setMermaidError("[Mermaid render error] " + String(err));
             // eslint-disable-next-line no-console
@@ -55,13 +93,15 @@ const InteractiveNavigation: React.FC<InteractiveNavigationProps> = ({ toc, diag
       // eslint-disable-next-line no-console
       console.warn("[No valid Mermaid diagram string provided]", diagram);
     }
-  }, [diagram, isMermaid, theme, isClient]);
+  }, [diagram, isMermaid, theme, isClient, toc]);
+  // No modal handler needed
 
   if (!isClient) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col gap-8 p-8">
-      {hasTOC || isMermaid ? (
+      {/* No modal */}
+      {(hasTOC || isMermaid) ? (
         <>
           {isMermaid && (
             <section>
@@ -101,7 +141,7 @@ const InteractiveNavigation: React.FC<InteractiveNavigationProps> = ({ toc, diag
               <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Interactive Table of Contents</h2>
               <ul className="bg-white dark:bg-gray-800 rounded-xl p-6 text-base border border-gray-200 dark:border-gray-700 shadow-md">
                 {toc.map((item: any) => (
-                  <li key={item.id || item.title} className="mb-6">
+                  <li key={item.id || item.title} id={`toc-${item.id}`} className="mb-6">
                     <div className="font-semibold mb-2 text-lg text-blue-700 dark:text-blue-300">{item.title}</div>
                     {item.content && (
                       <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl p-4 mb-3 text-base text-gray-900 dark:text-gray-100 whitespace-pre-wrap max-h-60 overflow-y-auto" style={{ fontSize: '1.15rem' }}>
@@ -111,7 +151,7 @@ const InteractiveNavigation: React.FC<InteractiveNavigationProps> = ({ toc, diag
                     {item.children && item.children.length > 0 && (
                       <ul className="ml-6 list-disc">
                         {item.children.map((child: any) => (
-                          <li key={child.id || child.title} className="mb-3">
+                          <li key={child.id || child.title} id={`toc-${child.id}`} className="mb-3">
                             <div className="font-semibold text-blue-600 dark:text-blue-200">{child.title}</div>
                             {child.content && (
                               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-700 rounded-xl p-3 text-base text-gray-900 dark:text-gray-100 whitespace-pre-wrap max-h-48 overflow-y-auto" style={{ fontSize: '1.08rem' }}>

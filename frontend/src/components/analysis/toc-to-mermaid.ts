@@ -15,11 +15,13 @@ export interface TOCSection {
 export function tocToMermaid(toc: TOCSection[]): string {
   let nodes: string[] = [];
   let edges: string[] = [];
+  let clicks: string[] = [];
 
   function walk(section: TOCSection, parentId?: string) {
     // Sanitize node id for Mermaid
     const nodeId = section.id.replace(/[^a-zA-Z0-9_]/g, "_");
     nodes.push(`${nodeId}[\"${section.title.replace(/\"/g, '\\"')}\"]`);
+    clicks.push(`click ${nodeId} sectionClick`);
     if (parentId) {
       edges.push(`${parentId} --> ${nodeId}`);
     }
@@ -37,6 +39,7 @@ export function tocToMermaid(toc: TOCSection[]): string {
   return [
     "graph LR",
     ...nodes,
-    ...edges
+    ...edges,
+    ...clicks
   ].join("\n");
 }

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { uploadPaper, uploadPaperInstant } from "@/lib/api";
+import type { ProcessingMode } from "@/lib/api";
 import { AnalysisDisplay } from "@/components/analysis/analysis-display";
 import { TOCDisplay } from "@/components/analysis/toc-display";
 import { PaperChat } from "@/components/chat/paper-chat";
@@ -14,7 +15,7 @@ const FileUpload: React.FC = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedMode, setSelectedMode] = useState("fast");
+  const [selectedMode, setSelectedMode] = useState<ProcessingMode>("fast");
   const [instantResult, setInstantResult] = useState<any | null>(null);
 
   const handleDrop = (e: React.DragEvent) => {
@@ -166,7 +167,7 @@ const FileUpload: React.FC = () => {
                     {Object.entries(instantResult.detailed_summary).map(([section, summary]) => (
                       <div key={section} className="mb-6">
                         <h3 className="text-xl font-semibold mb-2">{section}</h3>
-                        <p className="leading-relaxed text-gray-700 dark:text-gray-300">{summary}</p>
+                        <p className="leading-relaxed text-gray-700 dark:text-gray-300">{String(summary)}</p>
                       </div>
                     ))}
                   </div>
@@ -181,12 +182,12 @@ const FileUpload: React.FC = () => {
         </div>
       </div>
     ) : (
-      <div className="max-w-md mx-auto p-6 bg-white rounded shadow">
-        <h3 className="text-xl font-semibold mb-4">Upload a Research Paper</h3>
+      <div className="max-w-md mx-auto p-6 bg-white rounded shadow text-gray-900">
+        <h3 className="text-xl font-semibold mb-4 text-black">Upload a Research Paper</h3>
         <div className="mb-4">
-          <label className="block mb-2 font-medium">Choose Mode:</label>
+          <label className="block mb-2 font-medium text-black">Choose Mode:</label>
           <div className="flex gap-4">
-            <label>
+            <label className="text-black">
               <input
                 type="radio"
                 name="mode"
@@ -194,9 +195,9 @@ const FileUpload: React.FC = () => {
                 checked={selectedMode === "fast"}
                 onChange={() => setSelectedMode("fast")}
               />
-              <span className="ml-2">Fast (Quick summary)</span>
+              <span className="ml-2 text-black">Fast (Quick summary)</span>
             </label>
-            <label>
+            <label className="text-black">
               <input
                 type="radio"
                 name="mode"
@@ -204,9 +205,9 @@ const FileUpload: React.FC = () => {
                 checked={selectedMode === "enhanced"}
                 onChange={() => setSelectedMode("enhanced")}
               />
-              <span className="ml-2">Enhanced/Professional (Detailed)</span>
+              <span className="ml-2 text-black">Enhanced/Professional (Detailed)</span>
             </label>
-            <label>
+            <label className="text-black">
               <input
                 type="radio"
                 name="mode"
@@ -214,7 +215,7 @@ const FileUpload: React.FC = () => {
                 checked={selectedMode === "interactive"}
                 onChange={() => setSelectedMode("interactive")}
               />
-              <span className="ml-2">Interactive (TOC & Diagram)</span>
+              <span className="ml-2 text-black">Interactive (TOC & Diagram)</span>
             </label>
           </div>
         </div>
@@ -224,12 +225,12 @@ const FileUpload: React.FC = () => {
           onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
           onDragLeave={e => { e.preventDefault(); setIsDragOver(false); }}
         >
-          <p className="mb-2">Drag and drop a PDF file here, or</p>
+          <p className="mb-2 text-black">Drag and drop a PDF file here, or</p>
           <input
             type="file"
             accept="application/pdf"
             onChange={handleFileSelect}
-            className="block mx-auto"
+            className="block mx-auto text-black"
             disabled={isUploading}
           />
         </div>

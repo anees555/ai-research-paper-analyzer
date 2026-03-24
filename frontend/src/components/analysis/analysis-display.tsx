@@ -367,12 +367,12 @@ export function AnalysisDisplay({
                     <figure
                       key={idx}
                       className={cn(
-                        "rounded-lg overflow-hidden border",
+                        "group relative rounded-lg overflow-visible border",
                         theme === "dark" ? "border-gray-700 bg-gray-800" : "border-gray-200 bg-white shadow-sm"
                       )}
                     >
                       <div className={cn(
-                        "relative bg-center bg-cover",
+                        "relative bg-center bg-cover rounded-t-lg overflow-hidden",
                         theme === "dark" ? "bg-gray-700" : "bg-gray-100"
                       )}>
                         <img
@@ -381,6 +381,29 @@ export function AnalysisDisplay({
                           className="w-full h-64 object-cover"
                         />
                       </div>
+
+                      {/* Hover preview: show full figure in larger panel */}
+                      <div
+                        className={cn(
+                          "pointer-events-none absolute left-1/2 top-3 z-30 hidden w-[92vw] max-w-4xl -translate-x-1/2 rounded-xl border p-3 shadow-2xl group-hover:block",
+                          theme === "dark" ? "border-gray-600 bg-gray-900/95" : "border-gray-300 bg-white/95"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "mb-2 text-xs font-semibold",
+                            theme === "dark" ? "text-gray-200" : "text-gray-700"
+                          )}
+                        >
+                          Full Figure Preview
+                        </div>
+                        <img
+                          src={figure.url}
+                          alt={figure.caption}
+                          className="w-full max-h-[70vh] object-contain rounded-md"
+                        />
+                      </div>
+
                       <figcaption className="p-4">
                         <p className={cn(
                           "text-sm font-medium mb-1",

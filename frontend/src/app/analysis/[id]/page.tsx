@@ -23,6 +23,8 @@ export default function AnalysisPage() {
     diagram?: string;
     glossary?: Record<string, string>;
     html_summary?: string;
+    summarized_sections?: Record<string, string>;
+    processing_mode?: string;
     figures?: Array<{ url: string; caption?: string; description?: string; page?: number }>;
   };
   type ResultType = {
@@ -42,6 +44,62 @@ export default function AnalysisPage() {
   const isInstant = jobId && jobId.startsWith("instant-");
   const { data: job, isLoading, error } = useAnalysis(isInstant ? "" : jobId);
 
+  const escapeHtml = (text?: string) =>
+    (text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const paragraphize = (text?: string) => {
+    if (!text) return "";
+    return text
+      .split(/\n\s*\n/)
+      .map((block) => block.trim())
+      .filter(Boolean)
+      .map((block) => `<p>${escapeHtml(block)}</p>`)
+      .join("");
+  };
+
+  const buildEnhancedHtmlContent = (data: ResultType) => {
+    const detailed = data.detailed_summary || {};
+    const compSections = data.comprehensive_analysis?.summarized_sections || {};
+    const sections = Object.keys(detailed).length > 0 ? detailed : compSections;
+
+    let html = "";
+
+    if (data.quick_summary) {
+      html += `<h2>Quick Summary</h2>${paragraphize(data.quick_summary)}`;
+    }
+
+    if (Object.keys(detailed).length > 0) {
+      html += "<h2>Detailed Summary</h2>";
+      Object.entries(detailed).forEach(([section, summary]) => {
+        html += `<h3>${escapeHtml(section)}</h3>${paragraphize(summary)}`;
+      });
+    }
+
+    if (Object.keys(compSections).length > 0) {
+      html += "<h2>Comprehensive Summary</h2>";
+      Object.entries(compSections).forEach(([section, summary]) => {
+        html += `<h3>${escapeHtml(section)}</h3>${paragraphize(summary)}`;
+      });
+    }
+
+    if (!html && Object.keys(sections).length > 0) {
+      Object.entries(sections).forEach(([section, summary]) => {
+        html += `<h2>${escapeHtml(section)}</h2>${paragraphize(summary)}`;
+      });
+    }
+
+    if (!html) {
+      html = `<h2>Summary</h2>${paragraphize(data.original_abstract || "No summary available.")}`;
+    }
+
+    return html;
+  };
+
   useEffect(() => {
     if (isInstant) {
       const stored = localStorage.getItem(`instant_result_${jobId}`);
@@ -52,7 +110,7 @@ export default function AnalysisPage() {
   }, [isInstant, jobId]);
 
   if (isInstant && instantResult) {
-    // INTERACTIVE MODE: Only show interactive navigation UI, never fallback to summary/abstract
+    // Instant mode: render interactive UI when TOC/diagram exists; otherwise render standard summary view.
     const result = instantResult;
     // Fix: extract TOC array from object if needed (only use toc if it's an array)
     const toc = Array.isArray(result.comprehensive_analysis?.toc) ? result.comprehensive_analysis.toc : undefined;
@@ -64,10 +122,29 @@ export default function AnalysisPage() {
         </div>
       );
     }
-    // If no TOC/diagram, show nothing (or a message)
+
+    const instantHtml =
+      result.comprehensive_analysis?.html_summary || buildEnhancedHtmlContent(result);
+
+    // Non-interactive instant result (e.g., fast mode) should still show summary content.
     return (
-      <div className="flex flex-col min-h-screen items-center justify-center">
-        <div className="text-gray-500 text-lg mt-12">Interactive navigation data not available for this paper.</div>
+      <div className="flex flex-col min-h-screen">
+        <AnalysisDisplay
+          title={result.metadata.title}
+          abstract={result.original_abstract}
+          htmlContent={instantHtml}
+          glossary={result.comprehensive_analysis?.glossary || {}}
+          figures={result.comprehensive_analysis?.figures?.map((fig) => ({
+            url: fig.url?.startsWith("http") ? fig.url : `http://localhost:8003${fig.url}`,
+            caption: fig.caption || fig.description || "Figure",
+            page: fig.page || 1,
+          })) || []}
+          metadata={{
+            authors: result.metadata.authors,
+            num_sections: result.metadata.num_sections,
+            processing_method: result.metadata.processing_method,
+          }}
+        />
       </div>
     );
   }
@@ -181,6 +258,7 @@ export default function AnalysisPage() {
 
   // Completed State
   const result = job.result! as ResultType;
+
   // Interactive mode: check for toc/diagram in comprehensive_analysis
   const toc = Array.isArray(result.comprehensive_analysis?.toc) ? result.comprehensive_analysis.toc : undefined;
   let diagram = toc && toc.length > 0 ? tocToMermaid(toc) : result.comprehensive_analysis?.diagram;
@@ -189,21 +267,22 @@ export default function AnalysisPage() {
     return (
       <div className="flex flex-col min-h-screen">
         <InteractiveNavigation toc={toc} diagram={diagram} />
+        <div className="max-w-4xl mx-auto w-full pb-8">
+          <PaperChat jobId={jobId} paperTitle={result.metadata.title} />
+        </div>
       </div>
     );
   }
   // ENHANCED MODE: Show original abstract and sectionwise summary for Introduction, Method, Conclusion only
-  const introSummary = result.detailed_summary?.Introduction || result.detailed_summary?.introduction;
-  const methodSummary = result.detailed_summary?.Method || result.detailed_summary?.method;
-  const conclusionSummary = result.detailed_summary?.Conclusion || result.detailed_summary?.conclusion;
+  const enhancedHtml =
+    result.comprehensive_analysis?.html_summary || buildEnhancedHtmlContent(result);
+
   return (
     <div className="flex flex-col min-h-screen">
       <AnalysisDisplay
         title={result.metadata.title}
         abstract={result.original_abstract}
-        htmlContent={`<h2>Introduction</h2><p>${introSummary || "No summary available."}</p>
-          <h2>Method</h2><p>${methodSummary || "No summary available."}</p>
-          <h2>Conclusion</h2><p>${conclusionSummary || "No summary available."}</p>`}
+        htmlContent={enhancedHtml}
         glossary={result.comprehensive_analysis?.glossary || {}}
         figures={result.comprehensive_analysis?.figures?.map((fig) => ({
           url: fig.url?.startsWith("http") ? fig.url : `http://localhost:8003${fig.url}`,

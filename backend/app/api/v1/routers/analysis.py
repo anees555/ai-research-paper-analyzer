@@ -39,7 +39,8 @@ async def process_analysis_task(job_id: str, file_path: str, mode: str = "fast")
         if mode == ProcessingMode.FAST:
             result = await fast_analysis_service.analyze_fast(file_path, job_id)
         elif mode == ProcessingMode.ENHANCED:
-            result = await enhanced_analysis_service.analyze_paper_enhanced(file_path, job_id)
+            # Use robust minimal enhanced analysis for enhanced mode
+            result = await enhanced_analysis_service.analyze_paper_minimal_enhanced(file_path, job_id)
         elif mode == ProcessingMode.INTERACTIVE:
             # Extract real sections/subsections from the PDF using the robust parser
             from scripts.parse_pdf_optimized import parse_pdf_with_grobid_optimized as parse_pdf_with_grobid

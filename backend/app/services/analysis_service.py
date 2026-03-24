@@ -376,5 +376,6 @@ class AnalysisService:
             merged = await self.merge_summaries(chunk_summaries, gen_kwargs)
             analysis["main_contribution"] = self.postprocess_summary(merged)
         return analysis
+    
 
 analysis_service = AnalysisService()
