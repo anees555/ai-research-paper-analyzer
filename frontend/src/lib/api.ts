@@ -33,8 +33,20 @@ export interface InstantAnalysisResponse {
   };
 }
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003/api/v1";
+const getDefaultApiBaseUrl = (): string => {
+  // Local desktop dev can still talk directly to backend on port 8003.
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:8003/api/v1";
+    }
+  }
+
+  // For tunneled/remote access, route API through the same host via reverse proxy.
+  return "/api/v1";
+};
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || getDefaultApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
