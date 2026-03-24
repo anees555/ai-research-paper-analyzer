@@ -1,0 +1,16 @@
+# Optional Named Tunnel config (requires Cloudflare account + domain)
+#
+# Usage outline:
+# 1) cloudflared tunnel login
+# 2) cloudflared tunnel create research-summary-local
+# 3) Save generated credentials JSON path below
+# 4) Configure DNS route in Cloudflare dashboard or via cloudflared command
+# 5) Run: cloudflared tunnel --config ./cloudflared-config.example.yml run
+
+tunnel: REPLACE_WITH_TUNNEL_ID
+credentials-file: C:/Users/Lenovo/.cloudflared/REPLACE_WITH_TUNNEL_ID.json
+
+ingress:
+  - hostname: app.yourdomain.com
+    service: http://localhost:8080
+  - service: http_status:404
